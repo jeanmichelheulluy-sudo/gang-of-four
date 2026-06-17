@@ -1,12 +1,599 @@
-{
-  "name": "gang-of-four",
-  "version": "1.0.0",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2"
-  }
-}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gang of Four - Solo</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1e3d2f; color: white; text-align: center; margin: 0; padding: 10px; user-select: none; }
+        h1 { color: #f1c40f; margin-bottom: 2px; }
+        .sous-titre { margin-top: 0; margin-bottom: 15px; font-size: 0.9em; color: #ccc; }
+        #ecran-debug { color: #ff6b6b; font-weight: bold; margin: 5px; font-size: 0.9em; }
+        .score-bar { background-color: rgba(0, 0, 0, 0.6); border: 2px solid #f1c40f; border-radius: 8px; padding: 8px; margin-bottom: 15px; display: flex; justify-content: space-around; font-size: 0.9em; font-weight: bold; }
+        .score-joueur { color: #3498db; }
+        .score-ia { color: #e74c3c; }
+        .table-jeu { background-color: #145a32; border: 4px solid #d4ac0d; border-radius: 15px; padding: 15px; max-width: 600px; margin: 0 auto; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); position: relative; }
+        .adversaire { background: rgba(0,0,0,0.4); margin: 5px; padding: 8px; border-radius: 8px; font-size: 0.9em; border: 1px solid rgba(255,255,255,0.1); transition: background 0.3s; }
+        .tour-actif { background: rgba(241, 196, 15, 0.3) !important; border-color: #f1c40f !important; box-shadow: 0 0 10px rgba(241, 196, 15, 0.5); }
+        #annonce-table { color: #f1c40f; font-weight: bold; font-size: 1.1em; min-height: 25px; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .table-centre { background-color: rgba(0, 0, 0, 0.2); border: 2px dashed #27ae60; border-radius: 10px; min-height: 105px; margin: 5px 0 15px 0; display: flex; justify-content: center; align-items: center; padding: 10px; gap: 5px; position: relative; }
+        .zone-cartes { display: flex; flex-wrap: wrap; justify-content: center; margin-top: 15px; min-height: 120px; gap: 8px; }
+        .carte { width: 55px; height: 85px; background-color: #f7f4eb; border-radius: 6px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 2px 2px 5px rgba(0,0,0,0.6); border: 1px solid #c8bfa5; cursor: pointer; position: relative; transition: transform 0.15s, box-shadow 0.15s; }
+        .carte.selected { transform: translateY(-15px); box-shadow: 0 8px 15px rgba(0,0,0,0.7); border: 2px solid #3498db; }
+        .table-centre .carte { cursor: default; transform: none !important; box-shadow: 2px 2px 5px rgba(0,0,0,0.6) !important; border: 1px solid #c8bfa5 !important; }
+        .corner { font-family: Arial, sans-serif; font-size: 0.7em; font-weight: bold; padding: 2px 4px; position: absolute; }
+        .top-left { top: 0; left: 0; }
+        .bottom-right { bottom: 0; right: 0; transform: rotate(180deg); }
+        .center { font-family: "Georgia", serif; font-size: 2.2em; font-weight: bold; font-style: italic; display: flex; justify-content: center; align-items: center; height: 100%; width: 100%; }
+        .Vert { color: #1a6b3c; }
+        .Jaune { color: #dcb315; text-shadow: 0.5px 0.5px 0px rgba(0,0,0,0.2); }
+        .Rouge { color: #b02126; }
+        .carte.Multi { background: linear-gradient(135deg, #e8f5e9 0%, #fff9c4 50%, #ffebee 100%) !important; border: 3px solid #8e44ad !important; box-shadow: 0 0 10px rgba(142, 68, 173, 0.4) !important; }
+        .carte.Multi .corner { color: #8e44ad !important; font-size: 0.9em; }
+        .Special.Multi .center { background: linear-gradient(45deg, #1a6b3c, #dcb315, #b02126); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .center svg { width: 75%; height: 75%; }
+        .symbole-special { font-size: 1.6em; font-style: normal; }
+        .score-board { text-align: center; color: white; font-size: 1.1em; line-height: 1.6; }
+        .controles { margin-top: 20px; }
+        button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        button:hover { background-color: #d35400; transform: translateY(1px); }
+        button:disabled { background-color: #95a5a6; cursor: not-allowed; box-shadow: none; transform: none; }
+        .btn-jouer { background-color: #2980b9; font-weight: bold; }
+        .btn-jouer:hover:not(:disabled) { background-color: #1a5276; }
+        .btn-passer { background-color: #7f8c8d; }
+        .btn-passer:hover:not(:disabled) { background-color: #616a6b; }
+        .btn-manche { background-color: #8e44ad; font-weight: bold; display: none; }
+        .btn-manche:hover { background-color: #732d91; }
+        .btn-reset { background-color: #c0392b; font-size: 0.8em; padding: 8px 15px;}
+        .btn-reset:hover { background-color: #922b21; }
+    </style>
+</head>
+<body>
+
+    <h1>Gang of Four</h1>
+    <p class="sous-titre">Le premier à 100 points a perdu !</p>
+    <div id="ecran-debug"></div>
+
+    <div class="score-bar">
+        <span class="score-joueur" id="score-j0">Toi : 0 pts</span>
+        <span class="score-ia" id="score-j1">IA 1 : 0 pts</span>
+        <span class="score-ia" id="score-j2">IA 2 : 0 pts</span>
+        <span class="score-ia" id="score-j3">IA 3 : 0 pts</span>
+    </div>
+
+    <div class="table-jeu">
+        <div class="adversaire" id="ia2">IA 2 : 16 cartes</div>
+        <div style="display: flex; justify-content: space-between;">
+            <div class="adversaire" id="ia1">IA 1 : 16 cartes</div>
+            <div class="adversaire" id="ia3">IA 3 : 16 cartes</div>
+        </div>
+
+        <div id="annonce-table">À toi de commencer !</div>
+        
+        <div id="table-centre" class="table-centre">
+            <span id="texte-table-vide" style="color: #27ae60; font-style: italic; font-size: 0.9em;">Table vide</span>
+        </div>
+
+        <hr style="border-color: #d4ac0d; margin: 15px 0;">
+
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <h3 style="margin: 0;">Ta Main :</h3>
+            <span id="compteur-joueur" style="font-size: 0.9em; color: #ccc;">16 cartes</span>
+        </div>
+        
+        <div class="zone-cartes" id="main-joueur"></div>
+        
+        <div class="controles">
+            <button id="btn-jouer" class="btn-jouer" onclick="jouerCartes()">Jouer</button>
+            <button id="btn-passer" class="btn-passer" onclick="passerTour()">Passer</button>
+            <button id="btn-manche" class="btn-manche" onclick="nouvelleManche()">Manche Suivante</button>
+            <br>
+            <button class="btn-reset" onclick="nouvellePartie()">Reset Total</button>
+        </div>
+    </div>
+
+    <script>
+        window.onerror = function(msg, url, line) {
+            document.getElementById('ecran-debug').innerText = "Erreur (Ligne " + line + ") : " + msg;
+            return false;
+        };
+
+        const couleurs = ['Vert', 'Jaune', 'Rouge'];
+        const svgPhenix = '<svg viewBox="0 0 100 100" fill="currentColor"><path d="M50,12 C52,7 56,5 60,7 C56,10 53,11 50,12 Z M50,12 C46,15 45,20 48,24 C52,20 54,16 50,12 Z M48,24 C45,28 46,35 50,42 C54,35 55,28 48,24 Z M47,28 C30,15 15,25 10,45 C22,42 34,38 45,35 C35,44 25,52 18,58 C28,52 38,45 46,39 Z M53,28 C70,15 85,25 90,45 C78,42 66,38 55,35 C65,44 75,52 82,58 C72,52 62,45 54,39 Z M50,42 C47,58 40,75 25,90 C40,80 46,65 49,50 C50,65 53,80 65,90 C56,75 52,58 50,42 Z M50,45 C49,60 45,75 35,88 C44,78 48,65 50,52 C51,65 55,78 65,88 C54,75 51,60 50,45 Z"/></svg>';
+
+        let mains = [[], [], [], []]; 
+        let scoresGlobaux = [0, 0, 0, 0]; 
+        
+        let etatTable = null; 
+        let joueurActif = 0; 
+        let nbPassesCons = 0;
+        let maitreDuPli = 0;
+
+        function genererPaquet() {
+            let paquet = [];
+            for (let c of couleurs) {
+                for (let v = 1; v <= 10; v++) {
+                    paquet.push({ valeurSort: v, rang: v, display: v.toString(), couleur: c, type: 'Normal' });
+                    paquet.push({ valeurSort: v, rang: v, display: v.toString(), couleur: c, type: 'Normal' });
+                }
+            }
+            paquet.push({ valeurSort: 1.5, rang: 1, display: '1', cornerDisplay: '★', couleur: 'Special', classe: 'Multi', type: 'Special' });
+            paquet.push({ valeurSort: 11, rang: 11, display: svgPhenix, cornerDisplay: 'V', couleur: 'Vert', classe: 'PhenixV', type: 'Special' });
+            paquet.push({ valeurSort: 11.5, rang: 11, display: svgPhenix, cornerDisplay: 'J', couleur: 'Jaune', classe: 'PhenixJ', type: 'Special' });
+            paquet.push({ valeurSort: 12, rang: 12, display: '🐉', cornerDisplay: 'R', couleur: 'Rouge', classe: 'Dragon', type: 'Special' });
+            return paquet;
+        }
+
+        function trierCartes(main) {
+            const ordreCouleurs = { 'Vert': 1, 'Jaune': 2, 'Rouge': 3, 'Special': 4 };
+            return main.sort(function(a, b) {
+                return (a.valeurSort - b.valeurSort) || (ordreCouleurs[a.couleur] - ordreCouleurs[b.couleur]);
+            });
+        }
+
+        function getPuissanceCarte(rang, couleur) {
+            const poidsCouleur = { 'Vert': 0.1, 'Jaune': 0.2, 'Rouge': 0.3, 'Special': 0.4 };
+            return rang + (poidsCouleur[couleur] || 0);
+        }
+
+        function analyserCombinaison(cartesJouees) {
+            let nb = cartesJouees.length;
+            if (nb === 0) return null;
+
+            let combo = { nom: "", format: 0, puissance: 0, isGang: false };
+            let contientSpecial = false;
+            for(let i=0; i<cartesJouees.length; i++) { if(cartesJouees[i].type === 'Special') contientSpecial = true; }
+
+            // Vérification des cartes identiques (y compris les Gangs de 4, 5, 6, 7)
+            let rangBase = cartesJouees[0].rang;
+            let valideMulti = true;
+            for(let i=0; i<cartesJouees.length; i++) { if(cartesJouees[i].rang !== rangBase) valideMulti = false; }
+
+            if (valideMulti) {
+                combo.format = nb;
+                let cartePlusForte = cartesJouees[0];
+                for(let i=1; i<cartesJouees.length; i++) {
+                    if (getPuissanceCarte(cartesJouees[i].rang, cartesJouees[i].couleur) > getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur)) {
+                        cartePlusForte = cartesJouees[i];
+                    }
+                }
+                combo.puissance = getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur);
+
+                if (nb === 1) combo.nom = "Carte Seule";
+                if (nb === 2) combo.nom = "Paire";
+                if (nb === 3) combo.nom = "Brelan";
+                if (nb >= 4) { 
+                    combo.nom = "🔥 GANG OF " + nb + " 🔥"; 
+                    combo.isGang = true; 
+                    combo.puissance = (nb * 100) + combo.puissance; // La puissance explose avec le nombre de cartes
+                }
+                return combo;
+            } 
+            else if (nb === 5) {
+                if (contientSpecial) return null;
+                let isSuite = true;
+                for(let i = 1; i < 5; i++) { if (cartesJouees[i].rang !== cartesJouees[i-1].rang + 1) isSuite = false; }
+                let isCouleur = true;
+                for(let i = 1; i < 5; i++) { if (cartesJouees[i].couleur !== cartesJouees[0].couleur) isCouleur = false; }
+                
+                let isFull = (cartesJouees[0].rang === cartesJouees[1].rang && cartesJouees[1].rang === cartesJouees[2].rang && cartesJouees[3].rang === cartesJouees[4].rang) ||
+                             (cartesJouees[0].rang === cartesJouees[1].rang && cartesJouees[2].rang === cartesJouees[3].rang && cartesJouees[3].rang === cartesJouees[4].rang);
+
+                let carteMax = cartesJouees[4];
+                combo.format = 5;
+
+                if (isSuite && isCouleur) { 
+                    combo.nom = "🌟 QUINTE FLUSH 🌟"; 
+                    combo.isGang = true; // La Quinte Flush est un Gang !
+                    combo.puissance = 450 + getPuissanceCarte(carteMax.rang, carteMax.couleur); // Bat un Gang de 4, perd contre un Gang de 5
+                }
+                else if (isFull) { combo.nom = "Full"; combo.puissance = 200 + ((cartesJouees[2].rang === cartesJouees[0].rang) ? cartesJouees[0].rang : cartesJouees[4].rang); }
+                else if (isCouleur) { combo.nom = "Couleur"; combo.puissance = 100 + getPuissanceCarte(carteMax.rang, carteMax.couleur); }
+                else if (isSuite) { combo.nom = "Suite"; combo.puissance = getPuissanceCarte(carteMax.rang, carteMax.couleur); } 
+                else { return null; }
+                return combo;
+            }
+            return null;
+        }
+
+        function majAffichageScores() {
+            document.getElementById('score-j0').innerText = `Toi : ${scoresGlobaux[0]} pts`;
+            document.getElementById('score-j1').innerText = `IA 1 : ${scoresGlobaux[1]} pts`;
+            document.getElementById('score-j2').innerText = `IA 2 : ${scoresGlobaux[2]} pts`;
+            document.getElementById('score-j3').innerText = `IA 3 : ${scoresGlobaux[3]} pts`;
+        }
+
+        function calculerPenalite(nbCartes) {
+            if (nbCartes === 0) return 0;
+            if (nbCartes >= 1 && nbCartes <= 7) return nbCartes;
+            if (nbCartes >= 8 && nbCartes <= 9) return nbCartes * 2;
+            if (nbCartes >= 10 && nbCartes <= 15) return nbCartes * 3;
+            if (nbCartes === 16) return nbCartes * 4;
+            return 0;
+        }
+
+        function verifierFinDePartie() {
+            let gagnantManche = -1;
+            for(let i=0; i<4; i++) {
+                if (mains[i].length === 0) gagnantManche = i;
+            }
+
+            if (gagnantManche !== -1) {
+                let pts = [];
+                for(let i=0; i<4; i++) {
+                    let p = calculerPenalite(mains[i].length);
+                    pts.push(p);
+                    scoresGlobaux[i] += p;
+                }
+                
+                majAffichageScores();
+                let finDePartie = false;
+                for(let i=0; i<4; i++) { if(scoresGlobaux[i] >= 100) finDePartie = true; }
+
+                let recapScores = `
+                    <div class="score-board">
+                        <b>PÉNALITÉS DE LA MANCHE :</b><br>
+                        Toi : <b>+${pts[0]}</b> <i>(${mains[0].length} cartes)</i><br>
+                        IA 1 : <b>+${pts[1]}</b> <i>(${mains[1].length} cartes)</i><br>
+                        IA 2 : <b>+${pts[2]}</b> <i>(${mains[2].length} cartes)</i><br>
+                        IA 3 : <b>+${pts[3]}</b> <i>(${mains[3].length} cartes)</i>
+                    </div>
+                `;
+
+                if (finDePartie) {
+                    let minScore = Math.min(...scoresGlobaux);
+                    let indexGagnants = [];
+                    for(let i=0; i<4; i++) { if(scoresGlobaux[i] === minScore) indexGagnants.push(i); }
+                    let nomVainqueur = indexGagnants.includes(0) ? "🏆 TU ES LE GRAND VAINQUEUR ! 🏆" : "💥 L'IA " + indexGagnants[0] + " REMPORTE LA PARTIE ! 💥";
+                    document.getElementById('annonce-table').innerHTML = `<span style="color: #f1c40f; font-size: 1.3em;">${nomVainqueur}</span>`;
+                    document.getElementById('table-centre').innerHTML = recapScores + `<br><b style="color:#e74c3c;">LA LIMITE DE 100 POINTS A ÉTÉ ATTEINTE !</b>`;
+                    document.getElementById('btn-manche').style.display = 'none'; 
+                } else {
+                    let msgGagnant = gagnantManche === 0 ? "🏆 TU AS GAGNÉ LA MANCHE ! 🏆" : "💥 L'IA " + gagnantManche + " REMPORTE LA MANCHE ! 💥";
+                    document.getElementById('annonce-table').innerHTML = `<span style="color: #f1c40f; font-size: 1.3em;">${msgGagnant}</span>`;
+                    document.getElementById('table-centre').innerHTML = recapScores;
+                    document.getElementById('btn-manche').style.display = 'inline-block'; 
+                }
+                
+                document.getElementById('btn-jouer').disabled = true;
+                document.getElementById('btn-passer').disabled = true;
+                let adversaires = document.querySelectorAll('.adversaire');
+                for(let i=0; i<adversaires.length; i++) adversaires[i].classList.remove('tour-actif');
+                return true; 
+            }
+            return false;
+        }
+
+        function getToutesCombos5(mainIA) {
+            let combos = [];
+            let normales = mainIA.filter(function(c) { return c.type !== 'Special'; });
+            let groupes = {};
+            normales.forEach(function(c) { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
+            
+            let brelans = []; let paires = [];
+            for(let r in groupes) {
+                if(groupes[r].length >= 3) brelans.push(groupes[r].slice(0,3));
+                if(groupes[r].length >= 2) paires.push(groupes[r].slice(0,2));
+            }
+            for(let i=0; i<brelans.length; i++) {
+                for(let j=0; j<paires.length; j++) {
+                    if(brelans[i][0].rang !== paires[j][0].rang) combos.push(brelans[i].concat(paires[j]));
+                }
+            }
+
+            let rangsPresents = Object.keys(groupes).map(Number).sort(function(a,b){return a-b});
+            for(let i=0; i<rangsPresents.length; i++) {
+                let r = rangsPresents[i];
+                if(groupes[r] && groupes[r+1] && groupes[r+2] && groupes[r+3] && groupes[r+4]) {
+                    combos.push([groupes[r][0], groupes[r+1][0], groupes[r+2][0], groupes[r+3][0], groupes[r+4][0]]);
+                }
+            }
+
+            let parCouleur = { 'Vert':[], 'Jaune':[], 'Rouge':[] };
+            normales.forEach(function(c) { parCouleur[c.couleur].push(c); });
+            for(let col in parCouleur) {
+                if(parCouleur[col].length >= 5) combos.push(parCouleur[col].slice(0,5)); 
+            }
+            return combos;
+        }
+
+        function chercherComboPourIA(mainIA, formatAttendu, puissanceMin) {
+            if (formatAttendu === 5) {
+                let combos5 = getToutesCombos5(mainIA);
+                let combosValides = [];
+                for(let i=0; i<combos5.length; i++) {
+                    let evalCombo = analyserCombinaison(combos5[i]);
+                    if(evalCombo && evalCombo.puissance > puissanceMin) combosValides.push({combo: combos5[i], puissance: evalCombo.puissance});
+                }
+                if(combosValides.length > 0) {
+                    combosValides.sort(function(a,b){return a.puissance - b.puissance}); 
+                    return combosValides[0].combo;
+                }
+                return null;
+            }
+            
+            if (formatAttendu > 3) return null; 
+            
+            let groupes = {};
+            for(let i=0; i<mainIA.length; i++) {
+                let c = mainIA[i];
+                if(!groupes[c.rang]) groupes[c.rang] = [];
+                groupes[c.rang].push(c);
+            }
+            for (let rang in groupes) {
+                let cartesDuRang = groupes[rang];
+                if (cartesDuRang.length >= formatAttendu) {
+                    let tentative = cartesDuRang.slice(0, formatAttendu);
+                    let combo = analyserCombinaison(tentative);
+                    if (combo && combo.puissance > puissanceMin) return tentative;
+                    
+                    tentative = cartesDuRang.slice(-formatAttendu);
+                    combo = analyserCombinaison(tentative);
+                    if (combo && combo.puissance > puissanceMin) return tentative;
+                }
+            }
+            return null;
+        }
+
+        function lancerTour() {
+            let adversaires = document.querySelectorAll('.adversaire');
+            for(let i=0; i<adversaires.length; i++) adversaires[i].classList.remove('tour-actif');
+            
+            if (joueurActif === 0) {
+                document.getElementById('btn-jouer').disabled = false;
+                document.getElementById('btn-passer').disabled = false;
+            } else {
+                document.getElementById('btn-jouer').disabled = true;
+                document.getElementById('btn-passer').disabled = true;
+                document.getElementById('ia' + joueurActif).classList.add('tour-actif');
+                setTimeout(faireJouerIA, 1200); 
+            }
+        }
+
+        function faireJouerIA() {
+            let mainIA = mains[joueurActif]; 
+            if (!mainIA) return;
+            
+            let aJoue = false;
+
+            if (etatTable === null) {
+                let combos5 = getToutesCombos5(mainIA);
+                let comboA_Jouer = null;
+                let nomA_Jouer = "";
+                
+                if (combos5.length > 0) {
+                    let evals = combos5.map(function(c) { return {combo: c, info: analyserCombinaison(c)}; });
+                    evals.sort(function(a,b) { return a.info.puissance - b.info.puissance; });
+                    comboA_Jouer = evals[0].combo;
+                    nomA_Jouer = evals[0].info.nom;
+                } else {
+                    let groupes = {};
+                    mainIA.forEach(function(c) { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
+                    let paires = [];
+                    for(let r in groupes) { if(groupes[r].length >= 2) paires.push(groupes[r].slice(0,2)); }
+                    
+                    if (paires.length > 0) {
+                        comboA_Jouer = paires[0];
+                        nomA_Jouer = "Paire";
+                    } else {
+                        comboA_Jouer = [mainIA[0]];
+                        nomA_Jouer = "Carte Seule";
+                    }
+                }
+
+                for(let k=0; k<comboA_Jouer.length; k++) {
+                    let idx = mainIA.indexOf(comboA_Jouer[k]);
+                    if(idx > -1) mainIA.splice(idx, 1);
+                }
+                poserCartesTable(comboA_Jouer, nomA_Jouer, joueurActif);
+                aJoue = true;
+                
+            } else {
+                let comboTrouve = chercherComboPourIA(mainIA, etatTable.format, etatTable.puissance);
+                if (comboTrouve) {
+                    for(let k=0; k<comboTrouve.length; k++) {
+                        let carteTrouvee = comboTrouve[k];
+                        let idx = -1;
+                        for(let j=0; j<mainIA.length; j++) {
+                            if(mainIA[j].valeurSort === carteTrouvee.valeurSort && mainIA[j].couleur === carteTrouvee.couleur) {
+                                idx = j; break;
+                            }
+                        }
+                        if(idx > -1) mainIA.splice(idx, 1);
+                    }
+                    let info = analyserCombinaison(comboTrouve);
+                    poserCartesTable(comboTrouve, info.nom, joueurActif);
+                    aJoue = true;
+                }
+            }
+
+            document.getElementById('ia' + joueurActif).innerText = "IA " + joueurActif + " : " + mainIA.length + " cartes";
+            
+            if (aJoue && verifierFinDePartie()) return; 
+
+            if (!aJoue) {
+                document.getElementById('annonce-table').innerText = "IA " + joueurActif + " passe !";
+                nbPassesCons++;
+            } else {
+                nbPassesCons = 0;
+                maitreDuPli = joueurActif;
+            }
+            verifierFinDePliOuTourSuivant();
+        }
+
+        function verifierFinDePliOuTourSuivant() {
+            if (nbPassesCons >= 3) {
+                setTimeout(function() {
+                    etatTable = null;
+                    document.getElementById('annonce-table').innerText = maitreDuPli === 0 ? "Tu remportes le pli ! Relance !" : "IA " + maitreDuPli + " remporte le pli.";
+                    document.getElementById('table-centre').innerHTML = '<span style="color: #27ae60; font-style: italic; font-size: 0.9em;">Table vide</span>';
+                    nbPassesCons = 0;
+                    joueurActif = maitreDuPli;
+                    lancerTour();
+                }, 1500);
+            } else {
+                joueurActif = (joueurActif + 1) % 4;
+                lancerTour();
+            }
+        }
+
+        function poserCartesTable(cartes, nom, proprietaireId) {
+            let tableCentre = document.getElementById('table-centre');
+            tableCentre.innerHTML = ""; 
+            
+            let comboInfo = analyserCombinaison(cartes);
+            etatTable = comboInfo;
+            document.getElementById('annonce-table').innerText = (proprietaireId === 0 ? "Toi : " : "IA " + proprietaireId + " : ") + comboInfo.nom;
+
+            for(let i=0; i<cartes.length; i++) {
+                let carte = cartes[i];
+                let div = document.createElement('div');
+                div.className = "carte " + carte.couleur + " " + (carte.classe || '');
+                let cornerText = carte.cornerDisplay ? carte.cornerDisplay : carte.display;
+                let isSpecial = (carte.type === 'Special' && carte.classe === 'Dragon') ? 'symbole-special' : '';
+                div.innerHTML = '<div class="corner top-left">' + cornerText + '</div>' +
+                                '<div class="center ' + isSpecial + '">' + carte.display + '</div>' +
+                                '<div class="corner bottom-right">' + cornerText + '</div>';
+                tableCentre.appendChild(div);
+            }
+        }
+
+        function jouerCartes() {
+            let selectionNodes = document.querySelectorAll('#main-joueur .carte.selected');
+            if(selectionNodes.length === 0) { alert("Sélectionne des cartes d'abord !"); return; }
+
+            let cartesJouees = [];
+            for(let i=0; i<selectionNodes.length; i++) {
+                let el = selectionNodes[i];
+                cartesJouees.push({
+                    element: el,
+                    rang: Number(el.getAttribute('data-rang')),
+                    couleur: el.getAttribute('data-couleur'),
+                    valeurSort: Number(el.getAttribute('data-valeursort')), 
+                    display: el.querySelector('.center').innerHTML, 
+                    type: el.getAttribute('data-type'),
+                    classe: el.classList.contains('Multi') ? 'Multi' : (el.classList.contains('Dragon') ? 'Dragon' : '')
+                });
+            }
+            cartesJouees.sort(function(a, b) { return a.rang - b.rang; });
+
+            let nouvelleCombo = analyserCombinaison(cartesJouees);
+            if (!nouvelleCombo) { alert("Combinaison invalide !"); return; }
+
+            // Vérification spéciale pour les Gangs
+            if (etatTable !== null) {
+                if (nouvelleCombo.isGang) {
+                    if (etatTable.isGang && nouvelleCombo.puissance <= etatTable.puissance) { 
+                        alert("Ton Gang doit être plus fort que celui sur la table !"); return; 
+                    }
+                    // Si la table n'était pas un gang, un Gang bat tout, donc ça passe direct !
+                } else {
+                    if (etatTable.isGang) { alert("Il te faut un Gang pour battre un Gang !"); return; }
+                    if (nouvelleCombo.format !== etatTable.format) { alert("Tu dois jouer le même format (Table: " + etatTable.nom + ")."); return; }
+                    if (nouvelleCombo.puissance <= etatTable.puissance) { alert("Ta combinaison est trop faible !"); return; }
+                }
+            }
+
+            for(let i=0; i<cartesJouees.length; i++) {
+                let carteRetiree = cartesJouees[i];
+                let idx = -1;
+                for(let j=0; j<mains[0].length; j++) {
+                    if(mains[0][j].valeurSort === carteRetiree.valeurSort && mains[0][j].couleur === carteRetiree.couleur) {
+                        idx = j; break;
+                    }
+                }
+                if(idx > -1) mains[0].splice(idx, 1);
+            }
+
+            poserCartesTable(cartesJouees, nouvelleCombo.nom, 0);
+            afficherMain(); 
+            
+            if (verifierFinDePartie()) return;
+            
+            nbPassesCons = 0;
+            maitreDuPli = 0;
+            joueurActif = 1; // On donne la main au joueur 1 (IA1)
+            verifierFinDePliOuTourSuivant();
+        }
+
+        function passerTour() {
+            if (etatTable === null) { alert("Tu dois commencer !"); return; }
+            document.getElementById('annonce-table').innerText = "Tu passes.";
+            nbPassesCons++;
+            afficherMain(); 
+            
+            joueurActif = 1; // On donne la main au joueur 1 (IA1)
+            verifierFinDePliOuTourSuivant();
+        }
+
+        function afficherMain() {
+            let conteneur = document.getElementById('main-joueur');
+            conteneur.innerHTML = "";
+            document.getElementById('compteur-joueur').innerText = mains[0].length + " cartes";
+            
+            for(let i=0; i<mains[0].length; i++) {
+                let carte = mains[0][i];
+                let div = document.createElement('div');
+                div.className = "carte " + carte.couleur + " " + (carte.classe || '');
+                div.setAttribute('data-rang', carte.rang);
+                div.setAttribute('data-couleur', carte.couleur);
+                div.setAttribute('data-type', carte.type);
+                div.setAttribute('data-valeursort', carte.valeurSort); 
+                div.onclick = function() { this.classList.toggle('selected'); };
+                
+                let cornerText = carte.cornerDisplay ? carte.cornerDisplay : carte.display;
+                let isSpecial = (carte.type === 'Special' && carte.classe === 'Dragon') ? 'symbole-special' : '';
+                div.innerHTML = '<div class="corner top-left">' + cornerText + '</div>' +
+                                '<div class="center ' + isSpecial + '">' + carte.display + '</div>' +
+                                '<div class="corner bottom-right">' + cornerText + '</div>';
+                conteneur.appendChild(div);
+            }
+        }
+
+        function nouvelleManche() {
+            document.getElementById('btn-manche').style.display = 'none';
+            try {
+                let paquet = genererPaquet();
+                for (let i = paquet.length - 1; i > 0; i--) {
+                    let j = Math.floor(Math.random() * (i + 1));
+                    let temp = paquet[i];
+                    paquet[i] = paquet[j];
+                    paquet[j] = temp;
+                }
+
+                mains[0] = trierCartes(paquet.slice(0, 16));
+                mains[1] = trierCartes(paquet.slice(16, 32)); 
+                mains[2] = trierCartes(paquet.slice(32, 48)); 
+                mains[3] = trierCartes(paquet.slice(48, 64)); 
+                
+                document.getElementById('ia1').innerText = "IA 1 : 16 cartes";
+                document.getElementById('ia2').innerText = "IA 2 : 16 cartes";
+                document.getElementById('ia3').innerText = "IA 3 : 16 cartes";
+
+                etatTable = null;
+                nbPassesCons = 0;
+                maitreDuPli = 0;
+                joueurActif = 0;
+                
+                document.getElementById('annonce-table').innerText = "Nouvelle manche ! À toi de commencer.";
+                document.getElementById('table-centre').innerHTML = '<span style="color: #27ae60; font-style: italic; font-size: 0.9em;">Table vide</span>';
+
+                afficherMain();
+                lancerTour();
+            } catch (erreur) {
+                alert("Erreur de distribution : " + erreur.message);
+            }
+        }
+
+        window.onload = function() {
+            try {
+                scoresGlobaux = [0, 0, 0, 0];
+                majAffichageScores();
+                nouvelleManche();
+            } catch(e) {
+                document.getElementById('ecran-debug').innerText = "Erreur fatale au lancement : " + e.message;
+            }
+        };
+    </script>
+</body>
+</html>
