@@ -18,7 +18,6 @@ let joueurActif = 0;
 let nbPassesCons = 0;
 let maitreDuPli = 0;
 
-// Variables pour le Tribut (Échange de cartes)
 let dernierGagnant = null;
 let dernierPerdant = null;
 let phaseEchange = false;
@@ -35,9 +34,10 @@ function genererPaquet() {
         }
     }
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 1.5, rang: 1, couleur: 'Special', classe: 'Multi', type: 'Special', display: '1' });
-    // CORRECTION : Affichage Ph pour Phénix
-    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: 'Ph' });
-    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: 'Ph' });
+    // Les Phénix avec le symbole Aigle
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: '🦅' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: '🦅' });
+    // Le Dragon
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 12, rang: 12, couleur: 'Rouge', classe: 'Dragon', type: 'Special', display: '🐉' });
     return paquet;
 }
@@ -137,9 +137,7 @@ function demarrerNouvelleManche() {
     nbPassesCons = 0;
     maitreDuPli = 0;
 
-    // RÈGLE DU TRIBUT
     if (dernierGagnant !== null && dernierPerdant !== null) {
-        // Le perdant donne sa meilleure carte
         let mainPerdant = mains[dernierPerdant];
         let bestIndex = 0; let bestPower = 0;
         mainPerdant.forEach((c, i) => {
@@ -151,14 +149,12 @@ function demarrerNouvelleManche() {
         mains[dernierGagnant].push(carteDonnee);
         mains[dernierGagnant] = trierCartes(mains[dernierGagnant]);
 
-        // Si le gagnant est une IA, elle rend sa carte la plus faible automatiquement
         if (typesJoueurs[dernierGagnant] === 'ia') {
             let pireCarte = mains[dernierGagnant].splice(0, 1)[0];
             mains[dernierPerdant].push(pireCarte);
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             lancerPartie();
         } else {
-            // Le joueur humain doit choisir
             phaseEchange = true;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
@@ -170,7 +166,7 @@ function demarrerNouvelleManche() {
 
 function lancerPartie() {
     phaseEchange = false;
-    joueurActif = dernierGagnant !== null ? dernierGagnant : 0; // Le gagnant commence
+    joueurActif = dernierGagnant !== null ? dernierGagnant : 0;
     partieEnCours = true;
     synchroniserToutLeMonde();
     verifierTourIA();
@@ -194,13 +190,10 @@ function verifierTourIA() {
     if (typesJoueurs[joueurActif] === 'ia') setTimeout(faireJouerIA, 1500);
 }
 
-// CORRECTION : IA PLUS INTELLIGENTE
 function faireJouerIA() {
     let mainIA = mains[joueurActif];
     let aJoue = false;
     let comboA_Jouer = [];
-
-    // Grouper les cartes par rang pour trouver paires/brelans
     let groupes = {};
     mainIA.forEach(c => {
         if(!groupes[c.rang]) groupes[c.rang] = [];
@@ -208,7 +201,6 @@ function faireJouerIA() {
     });
 
     if (etatTable === null) {
-        // Ouverture : L'IA essaie de jouer une paire si elle en a une, sinon sa plus petite carte
         let paire = Object.values(groupes).find(g => g.length === 2);
         if (paire) comboA_Jouer = paire;
         else comboA_Jouer = [mainIA[0]]; 
@@ -223,7 +215,6 @@ function faireJouerIA() {
                 }
             }
         } else if (fDemande === 2 || fDemande === 3) {
-            // Cherche une paire ou un brelan plus fort
             let formatsValides = Object.values(groupes).filter(g => g.length >= fDemande);
             for (let g of formatsValides) {
                 let comboTest = g.slice(0, fDemande);
@@ -263,7 +254,6 @@ function partieTerminee(gagnant) {
     partieEnCours = false;
     dernierGagnant = gagnant;
     
-    // Identifier le perdant (celui qui a le plus de cartes)
     let maxCartes = -1; dernierPerdant = 0;
     mains.forEach((m, i) => { if(m.length > maxCartes) { maxCartes = m.length; dernierPerdant = i; } });
 
@@ -302,7 +292,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // RÈGLE DU TRIBUT : ACTION DU GAGNANT
     socket.on('actionDonnerCarte', (carteId) => {
         if (!phaseEchange) return;
         let monIndex = connexions.indexOf(socket.id);
