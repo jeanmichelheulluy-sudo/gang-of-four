@@ -21,6 +21,7 @@ let maitreDuPli = 0;
 let dernierGagnant = null;
 let dernierPerdant = null;
 let phaseEchange = false;
+let messageTribut = ""; // Historique textuel du tribut visible par tous
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
@@ -81,7 +82,6 @@ function analyserCombinaison(cartesJouees) {
     }
 
     if (nb === 5) {
-        // CORRECTION DU BUG FULL : On interdit UNIQUEMENT Dragon et Phénix, pas le "1" Multi
         let contientInterdit = cartesJouees.some(c => c.classe === 'Dragon' || c.classe === 'PhenixV' || c.classe === 'PhenixJ');
         if (contientInterdit) return null;
 
@@ -89,7 +89,6 @@ function analyserCombinaison(cartesJouees) {
         let isSuite = true;
         for(let i = 1; i < 5; i++) { if (cartesTriees[i].rang !== cartesTriees[i-1].rang + 1) isSuite = false; }
         
-        // CORRECTION COULEUR : Le "1" Multi prend la couleur des autres
         let couleurBase = cartesJouees.find(c => c.couleur !== 'Special')?.couleur;
         let isCouleur = couleurBase ? cartesJouees.every(c => c.couleur === couleurBase || c.couleur === 'Special') : false;
 
@@ -106,7 +105,6 @@ function analyserCombinaison(cartesJouees) {
         }
         if (isFull) {
             combo.nom = "Full";
-            // La puissance du full dépend toujours du brelan (carte index 2 après tri)
             combo.puissance = 200 + cartesTriees[2].rang;
             return combo;
         }
@@ -153,17 +151,25 @@ function demarrerNouvelleManche() {
         mains[dernierGagnant].push(carteDonnee);
         mains[dernierGagnant] = trierCartes(mains[dernierGagnant]);
 
+        let txtCarteDonnee = (carteDonnee.display || carteDonnee.rang) + " " + carteDonnee.couleur;
+
         if (typesJoueurs[dernierGagnant] === 'ia') {
             let pireCarte = mains[dernierGagnant].splice(0, 1)[0];
             mains[dernierPerdant].push(pireCarte);
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
+            let txtCarteRendue = (pireCarte.display || pireCarte.rang) + " " + pireCarte.couleur;
+            
+            // CORRECTION VISUELLE : Enregistrement textuel de l'échange automatique
+            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu [${txtCarteRendue}].`;
             lancerPartie();
         } else {
             phaseEchange = true;
+            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. En attente du choix de l'humain...`;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
         }
     } else {
+        messageTribut = "";
         lancerPartie();
     }
 }
@@ -183,7 +189,8 @@ function synchroniserToutLeMonde() {
                 votreIndex: i, maMain: mains[i], joueurActif: joueurActif,
                 etatTable: etatTable, taillesMains: mains.map(m => m.length),
                 scoresGlobaux: scoresGlobaux, nomsJoueurs: nomsJoueurs,
-                phaseEchange: phaseEchange, dernierGagnant: dernierGagnant
+                phaseEchange: phaseEchange, dernierGagnant: dernierGagnant,
+                messageTribut: messageTribut
             });
         }
     }
@@ -194,19 +201,40 @@ function verifierTourIA() {
     if (typesJoueurs[joueurActif] === 'ia') setTimeout(faireJouerIA, 1500);
 }
 
+// CORRECTION : LOGIQUE IA AVANCÉE POUR LES GANGS ET LES FULLS
 function faireJouerIA() {
     let mainIA = mains[joueurActif];
     let aJoue = false;
     let comboA_Jouer = [];
+
+    // 1. Regroupement par rang
     let groupes = {};
     mainIA.forEach(c => {
         if(!groupes[c.rang]) groupes[c.rang] = [];
         groupes[c.rang].push(c);
     });
 
+    // 2. Identification des structures
+    let gangsDispo = [];
+    Object.values(groupes).forEach(g => { if (g.length >= 4) gangsDispo.push(g); });
+    let brelansDispo = Object.values(groupes).filter(g => g.length >= 3);
+    let pairesDispo = Object.values(groupes).filter(g => g.length >= 2);
+
+    // Construction de Fulls potentiels (Brelan + Paire)
+    let fullsDispo = [];
+    brelansDispo.forEach(b => {
+        pairesDispo.forEach(p => {
+            if (b[0].rang !== p[0].rang) {
+                fullsDispo.push([...b.slice(0,3), ...p.slice(0,2)]);
+            }
+        });
+    });
+
     if (etatTable === null) {
-        let paire = Object.values(groupes).find(g => g.length === 2);
-        if (paire) comboA_Jouer = paire;
+        // L'IA ouvre le pli : Priorité aux Fulls, puis brelans, paires, ou sa plus petite carte
+        if (fullsDispo.length > 0) comboA_Jouer = fullsDispo[0];
+        else if (brelansDispo.length > 0) comboA_Jouer = brelansDispo[0].slice(0,3);
+        else if (pairesDispo.length > 0) comboA_Jouer = pairesDispo[0].slice(0,2);
         else comboA_Jouer = [mainIA[0]]; 
     } else {
         let fDemande = etatTable.format;
@@ -218,13 +246,29 @@ function faireJouerIA() {
                     comboA_Jouer = [mainIA[i]]; break;
                 }
             }
-        } else if (fDemande === 2 || fDemande === 3) {
-            let formatsValides = Object.values(groupes).filter(g => g.length >= fDemande);
-            for (let g of formatsValides) {
-                let comboTest = g.slice(0, fDemande);
-                let info = analyserCombinaison(comboTest);
-                if (info && info.puissance > pDemande) {
-                    comboA_Jouer = comboTest; break;
+        } else if (fDemande === 2) {
+            for (let p of pairesDispo) {
+                let test = p.slice(0,2);
+                if (analyserCombinaison(test).puissance > pDemande) { comboA_Jouer = test; break; }
+            }
+        } else if (fDemande === 3) {
+            for (let b of brelansDispo) {
+                let test = b.slice(0,3);
+                if (analyserCombinaison(test).puissance > pDemande) { comboA_Jouer = test; break; }
+            }
+        } else if (fDemande === 5 && etatTable.nom === "Full") {
+            for (let f of fullsDispo) {
+                if (analyserCombinaison(f).puissance > pDemande) { comboA_Jouer = f; break; }
+            }
+        }
+
+        // COUPE PAR GANG : Si l'IA n'a pas pu répondre normalement mais possède un Gang
+        if (comboA_Jouer.length === 0 && gangsDispo.length > 0) {
+            for (let g of gangsDispo) {
+                let infoGang = analyserCombinaison(g);
+                if (!etatTable.isGang || infoGang.puissance > pDemande) {
+                    comboA_Jouer = g; 
+                    break;
                 }
             }
         }
@@ -306,6 +350,9 @@ io.on('connection', (socket) => {
             let carteDonnee = mains[monIndex].splice(idx, 1)[0];
             mains[dernierPerdant].push(carteDonnee);
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
+            
+            let txtCarteRendue = (carteDonnee.display || carteDonnee.rang) + " " + carteDonnee.couleur;
+            messageTribut += ` Le gagnant humain lui a rendu [${txtCarteRendue}].`;
             lancerPartie();
         }
     });
