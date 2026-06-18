@@ -21,6 +21,7 @@
         .center { font-size: 1.8em; display: flex; justify-content: center; align-items: center; height: 100%; }
         button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; }
         button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        input[type="text"] { padding: 8px; font-size: 1em; border-radius: 5px; border: none; text-align: center; margin-bottom: 15px; width: 80%; }
     </style>
 </head>
 <body>
@@ -28,9 +29,15 @@
     <h1>Gang of Four 🌐</h1>
 
     <div id="ecran-connexion" class="box-menu">
+        <div>
+            <label style="font-weight: bold;">Renseigne ton nom :</label><br>
+            <input type="text" id="input-pseudo" placeholder="Ex: Jean" value="Joueur 1">
+        </div>
+        <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 0;">
+
         <div id="zone-hote" style="display:none;">
             <h3>Tu es le Chef de Table</h3>
-            <label>Nombre de joueurs réels (amis) :</label><br><br>
+            <label>Nombre de joueurs réels :</label><br><br>
             <select id="select-joueurs" style="padding: 8px; font-size: 1em;">
                 <option value="1">1 Humain (Toi + 3 IA)</option>
                 <option value="2" selected>2 Humains (+ 2 IA)</option>
@@ -40,21 +47,21 @@
             <button onclick="validerConfig()">Ouvrir la Table</button>
         </div>
         <div id="zone-attente" style="display:none;">
-            <h3>Rejoindre la partie</h3>
-            <p id="txt-attente">Configuration de la table en cours par le Chef...</p>
+            <h3>Rejoindre la table</h3>
+            <p id="txt-attente">Le chef configure la table...</p>
             <button id="btn-rejoindre" style="display:none;" onclick="rejoindre()">Se mettre à table</button>
         </div>
     </div>
 
     <div id="score-bar" class="score-bar" style="display:none;">
-        <span id="sc-0">J1 : 0 pts</span><span id="sc-1">J2 : 0 pts</span><span id="sc-2">J3 : 0 pts</span><span id="sc-3">J4 : 0 pts</span>
+        <span id="sc-0">-</span><span id="sc-1">-</span><span id="sc-2">-</span><span id="sc-3">-</span>
     </div>
 
     <div id="tapis" class="table-jeu">
-        <div class="adversaire" id="box-ia2">Joueur 3</div>
+        <div class="adversaire" id="box-ia2">-</div>
         <div style="display: flex; justify-content: space-between;">
-            <div class="adversaire" id="box-ia1">Joueur 2</div>
-            <div class="adversaire" id="box-ia3">Joueur 4</div>
+            <div class="adversaire" id="box-ia1">-</div>
+            <div class="adversaire" id="box-ia3">-</div>
         </div>
 
         <div id="annonce-table">En attente...</div>
@@ -82,28 +89,29 @@
                 document.getElementById('zone-hote').style.display = 'block';
             } else {
                 document.getElementById('zone-attente').style.display = 'block';
+                document.getElementById('btn-rejoindre').style.display = 'inline-block';
+                document.getElementById('txt-attente').innerText = "Renseigne ton nom puis clique ci-dessous.";
             }
         });
 
         function validerConfig() {
             let nb = document.getElementById('select-joueurs').value;
-            socket.emit('configurerPartie', { nbHumains: nb });
+            let pseudo = document.getElementById('input-pseudo').value.trim() || "Joueur 1";
+            socket.emit('configurerPartie', { nbHumains: nb, pseudo: pseudo });
             document.getElementById('zone-hote').style.display = 'none';
             document.getElementById('zone-attente').style.display = 'block';
+        }
+
+        function rejoindre() {
+            let pseudo = document.getElementById('input-pseudo').value.trim() || "Invité";
+            socket.emit('rejoindrePartie', { pseudo: pseudo });
+            document.getElementById('btn-rejoindre').disabled = true;
+            document.getElementById('txt-attente').innerText = "Attente des autres joueurs...";
         }
 
         socket.on('attenteJoueurs', (data) => {
-            document.getElementById('zone-hote').style.display = 'none';
-            document.getElementById('zone-attente').style.display = 'block';
-            document.getElementById('btn-rejoindre').style.display = 'inline-block';
             document.getElementById('txt-attente').innerText = `Joueurs connectés : ${data.connectes} / ${data.requis}`;
         });
-
-        function rejoindre() {
-            socket.emit('rejoindrePartie');
-            document.getElementById('btn-rejoindre').disabled = true;
-            document.getElementById('txt-attente').innerText = "Installation à ta place...";
-        }
 
         socket.on('etatPartie', (data) => {
             document.getElementById('ecran-connexion').style.display = 'none';
@@ -113,12 +121,12 @@
             monIndexJoueur = data.votreIndex;
             cartesSelectionnees = [];
 
-            // Mettre à jour les scores
+            // Affichage des scores globaux avec les vrais noms
             for(let i=0; i<4; i++) {
-                document.getElementById(`sc-${i}`).innerText = (i === monIndexJoueur ? `Toi : ` : `J${i+1} : `) + `${data.scoresGlobaux[i]} pts`;
+                document.getElementById(`sc-${i}`).innerText = `${data.nomsJoueurs[i]} : ${data.scoresGlobaux[i]} pts`;
             }
 
-            // Mettre à jour les noms et cartes des adversaires
+            // Répartition sur le tapis visuel autour de soi
             let mapping = [
                 { id: 'box-ia1', idx: (monIndexJoueur + 1) % 4 },
                 { id: 'box-ia2', idx: (monIndexJoueur + 2) % 4 },
@@ -127,28 +135,27 @@
 
             mapping.forEach(m => {
                 let div = document.getElementById(m.id);
-                let nom = data.typesJoueurs[m.idx] === 'ia' ? `IA ${m.idx}` : `Ami J${m.idx + 1}`;
-                div.innerText = `${nom} : ${data.taillesMains[m.idx]} cartes`;
+                div.innerText = `${data.nomsJoueurs[m.idx]} : ${data.taillesMains[m.idx]} cartes`;
                 div.classList.remove('tour-actif');
                 if(data.joueurActif === m.idx) div.classList.add('tour-actif');
             });
 
-            // Affichage de l'annonce de la table
+            // Annonce dynamique du tour actif
             if(data.joueurActif === monIndexJoueur) {
                 document.getElementById('annonce-table').innerText = "👑 À TOI DE JOUER !";
                 document.getElementById('btn-jouer').disabled = false;
                 document.getElementById('btn-passer').disabled = false;
             } else {
-                document.getElementById('annonce-table').innerText = `Attente du Joueur ${data.joueurActif + 1}...`;
+                document.getElementById('annonce-table').innerText = `Tour de : ${data.nomsJoueurs[data.joueurActif]}`;
                 document.getElementById('btn-jouer').disabled = true;
                 document.getElementById('btn-passer').disabled = true;
             }
 
-            // Dessiner la table centrale
+            // Centre de la table
             let tableCentre = document.getElementById('table-centre');
             tableCentre.innerHTML = "";
             if(data.etatTable) {
-                document.getElementById('annonce-table').innerText = `${data.etatTable.nomProprio} : ${data.etatTable.nom}`;
+                document.getElementById('annonce-table').innerText = `${data.etatTable.nomProprio} a posé : ${data.etatTable.nom}`;
                 data.etatTable.cartes.forEach(c => {
                     tableCentre.appendChild(creerVisuelCarte(c, false));
                 });
@@ -156,7 +163,7 @@
                 tableCentre.innerHTML = '<span style="color:#27ae60; font-style:italic;">Table vide - Nouveau Pli</span>';
             }
 
-            // Dessiner ma main
+            // Affichage de ma main personnelle
             let zoneMain = document.getElementById('ma-zone-cartes');
             zoneMain.innerHTML = "";
             document.getElementById('txt-compteur').innerText = data.maMain.length;
@@ -174,7 +181,8 @@
             if(cliquable) {
                 div.onclick = function() {
                     div.classList.toggle('selected');
-                    let idx = cartesSelectionnees.findIndex(c => c.valeurSort === carte.valeurSort && c.couleur === carte.couleur);
+                    // Tri précis par identifiant unique de carte
+                    let idx = cartesSelectionnees.findIndex(c => c.id === carte.id);
                     if(idx > -1) cartesSelectionnees.splice(idx, 1);
                     else cartesSelectionnees.push(carte);
                 };
@@ -192,7 +200,7 @@
         }
 
         socket.on('finManche', (data) => {
-            document.getElementById('annonce-table').innerText = `Manche terminée ! Vainqueur : Joueur ${data.gagnant + 1}`;
+            document.getElementById('annonce-table').innerText = `Manche terminée ! Gagnant : ${data.nomGagnant}`;
             document.getElementById('btn-suivant').style.display = 'inline-block';
             document.getElementById('btn-jouer').disabled = true;
             document.getElementById('btn-passer').disabled = true;
