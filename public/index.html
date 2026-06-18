@@ -4,13 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gang of Four Multi</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; background-color: #1e3d2f; color: white; text-align: center; margin: 0; padding: 10px; user-select: none; }
-        .box-menu { background: #145a32; border: 4px solid #d4ac0d; padding: 20px; border-radius: 15px; max-width: 400px; margin: 40px auto; }
+        /* Thème Couleurs : Ocre et Rouge foncé type Boîte de Jeu */
+        body { font-family: Arial, sans-serif; background-color: #4a1005; color: white; text-align: center; margin: 0; padding: 10px; user-select: none; }
+        .box-menu { background: #8a1c0b; border: 4px solid #d4ac0d; padding: 20px; border-radius: 15px; max-width: 400px; margin: 40px auto; }
         
-        /* NOEUVEAU LAYOUT FLEXBOX POUR LES SCORES À CÔTÉ */
+        /* Titre Customisé */
+        h1 { font-family: 'Cinzel', serif; font-size: 2.5em; color: #f1c40f; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); margin-bottom: 20px; }
+        .title-symbol { color: #d4ac0d; font-size: 0.8em; vertical-align: middle; margin: 0 15px; }
+
+        /* Layout global */
         .layout-principal { display: none; justify-content: center; align-items: flex-start; gap: 20px; max-width: 900px; margin: 0 auto; }
-        .table-jeu { background-color: #145a32; border: 4px solid #d4ac0d; border-radius: 15px; padding: 15px; flex: 1; max-width: 600px; }
+        .table-jeu { background-color: #8a1c0b; border: 4px solid #d4ac0d; border-radius: 15px; padding: 15px; flex: 1; max-width: 600px; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
         .score-panel { background-color: rgba(0, 0, 0, 0.6); border: 2px solid #f1c40f; border-radius: 8px; padding: 15px; min-width: 150px; display: flex; flex-direction: column; gap: 10px; font-size: 1em; text-align: left; }
         .score-panel div { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; }
         
@@ -23,8 +29,10 @@
 
         .adversaire { background: rgba(0,0,0,0.4); margin: 5px; padding: 8px; border-radius: 8px; font-size: 0.9em; }
         .tour-actif { background: rgba(241, 196, 15, 0.4) !important; border: 2px solid #f1c40f !important; }
-        .table-centre { background-color: rgba(0, 0, 0, 0.2); border: 2px dashed #27ae60; min-height: 105px; margin: 10px 0; display: flex; justify-content: center; align-items: center; gap: 5px; }
+        .table-centre { background-color: rgba(0, 0, 0, 0.2); border: 2px dashed #f1c40f; min-height: 105px; margin: 10px 0; display: flex; justify-content: center; align-items: center; gap: 5px; }
         .zone-cartes { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-height: 100px; }
+        
+        /* Design des Cartes */
         .carte { width: 55px; height: 85px; background-color: #f7f4eb; border-radius: 6px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #c8bfa5; cursor: pointer; color: black; font-weight: bold; position: relative; }
         .carte.selected { transform: translateY(-15px); border: 2px solid #3498db; }
         
@@ -36,16 +44,18 @@
 
         .corner { font-size: 0.7em; padding: 2px; position: absolute; } .top-left { top: 0; left: 0; } .bottom-right { bottom: 0; right: 0; transform: rotate(180deg); }
         .center { font-size: 1.8em; display: flex; justify-content: center; align-items: center; height: 100%; }
-        button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; }
+        
+        button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; font-family: inherit; font-weight: bold;}
         button:disabled { background-color: #95a5a6; cursor: not-allowed; }
         input[type="text"] { padding: 8px; font-size: 1em; border-radius: 5px; border: none; text-align: center; margin-bottom: 15px; width: 80%; }
         
-        .box-tribut { background: rgba(241, 196, 15, 0.2); border: 1px solid #f1c40f; padding: 8px; border-radius: 6px; margin: 10px auto; max-width: 580px; font-size: 0.9em; color: #f39c12; font-weight: bold; display: none; }
+        /* Bandeau Tribut Centré */
+        .box-tribut { background: rgba(241, 196, 15, 0.2); border: 1px solid #f1c40f; padding: 10px; border-radius: 6px; margin: 10px auto 20px auto; max-width: 600px; font-size: 1em; color: #f39c12; text-align: center; display: none; }
     </style>
 </head>
 <body>
 
-    <h1>Gang of Four 🌐</h1>
+    <h1><span class="title-symbol">❂</span>Gang of Four<span class="title-symbol">❂</span></h1>
 
     <div id="ecran-connexion" class="box-menu">
         <div>
@@ -73,12 +83,12 @@
     </div>
 
     <div id="modal-fin-manche" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; justify-content:center; align-items:center;">
-        <div style="background:#145a32; border:4px solid #f1c40f; border-radius:15px; padding:20px; width:90%; max-width:500px; text-align:center; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+        <div style="background:#8a1c0b; border:4px solid #f1c40f; border-radius:15px; padding:20px; width:90%; max-width:500px; text-align:center; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
             <h2 style="color:#f1c40f; margin-top:0;">Manche Terminée !</h2>
             <h3 id="modal-gagnant" style="color:white; margin-bottom: 20px;">Gagnant : ...</h3>
             <table style="width:100%; color:white; border-collapse:collapse; margin:20px 0;">
                 <thead>
-                    <tr style="border-bottom:2px solid #27ae60;">
+                    <tr style="border-bottom:2px solid #e67e22;">
                         <th style="padding:10px;">Joueur</th>
                         <th style="padding:10px;">Restantes</th>
                         <th style="padding:10px;">Pénalité</th>
@@ -164,7 +174,6 @@
 
         socket.on('demandeEchange', (carteRecue) => {
             modeEchange = true;
-            let nomCarte = carteRecue.display || carteRecue.rang;
             document.getElementById('annonce-table').innerText = `🎁 TRIBUT ! Tu as reçu une carte ! Choisis une carte à rendre.`;
             document.getElementById('btn-jouer').innerText = "Rendre la carte";
             document.getElementById('btn-jouer').disabled = false;
@@ -173,7 +182,6 @@
 
         socket.on('etatPartie', (data) => {
             document.getElementById('ecran-connexion').style.display = 'none';
-            // Affiche le layout complet contenant le tapis et les scores
             document.getElementById('layout-principal').style.display = 'flex';
 
             monIndexJoueur = data.votreIndex;
@@ -181,7 +189,6 @@
 
             let divTribut = document.getElementById('zone-tribut');
             if(data.messageTribut) {
-                // Remplacement de innerText par innerHTML pour interpréter la couleur HTML
                 divTribut.innerHTML = data.messageTribut;
                 divTribut.style.display = 'block';
             } else {
@@ -230,7 +237,7 @@
                 document.getElementById('annonce-table').innerText = `${data.etatTable.nomProprio} a posé : ${data.etatTable.nom}`;
                 data.etatTable.cartes.forEach(c => { tableCentre.appendChild(creerVisuelCarte(c, false)); });
             } else if (!data.phaseEchange) {
-                tableCentre.innerHTML = '<span style="color:#27ae60; font-style:italic;">Table vide - Nouveau Pli</span>';
+                tableCentre.innerHTML = '<span style="color:#f1c40f; font-style:italic;">Table vide - Nouveau Pli</span>';
             }
 
             let zoneMain = document.getElementById('ma-zone-cartes');
@@ -281,11 +288,11 @@
                 let isMe = (i === monIndexJoueur);
                 let bg = isMe ? 'rgba(255,255,255,0.1)' : 'transparent';
                 tbody.innerHTML += `
-                    <tr style="background:${bg}; border-bottom:1px solid rgba(39, 174, 96, 0.5);">
+                    <tr style="background:${bg}; border-bottom:1px solid rgba(230, 126, 34, 0.5);">
                         <td style="padding:8px;">${data.nomsJoueurs[i]} ${isMe ? '(Toi)' : ''}</td>
                         <td style="padding:8px; text-align:center; font-weight:bold;">${data.cartesRestantes[i]}</td>
-                        <td style="padding:8px; text-align:center; color:#e74c3c; font-weight:bold;">+${data.penalites[i]}</td>
-                        <td style="padding:8px; text-align:center; font-weight:bold; color:#f1c40f;">${data.scoresGlobaux[i]}</td>
+                        <td style="padding:8px; text-align:center; color:#f1c40f; font-weight:bold;">+${data.penalites[i]}</td>
+                        <td style="padding:8px; text-align:center; font-weight:bold; color:white;">${data.scoresGlobaux[i]}</td>
                     </tr>
                 `;
             }
