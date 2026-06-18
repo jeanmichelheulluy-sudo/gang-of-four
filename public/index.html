@@ -28,8 +28,6 @@
         button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; }
         button:disabled { background-color: #95a5a6; cursor: not-allowed; }
         input[type="text"] { padding: 8px; font-size: 1em; border-radius: 5px; border: none; text-align: center; margin-bottom: 15px; width: 80%; }
-        
-        /* BANDEAU HISTORIQUE DU TRIBUT */
         .box-tribut { background: rgba(241, 196, 15, 0.2); border: 1px solid #f1c40f; padding: 8px; border-radius: 6px; margin: 10px auto; max-width: 580px; font-size: 0.9em; color: #f39c12; font-weight: bold; display: none; }
     </style>
 </head>
@@ -142,7 +140,6 @@
             monIndexJoueur = data.votreIndex;
             cartesSelectionnees = [];
 
-            // Affichage de l'historique du Tribut s'il existe
             let divTribut = document.getElementById('zone-tribut');
             if(data.messageTribut) {
                 divTribut.innerText = data.messageTribut;
