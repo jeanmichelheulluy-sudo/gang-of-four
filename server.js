@@ -5,7 +5,6 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-// --- ÉTAT DU JEU CENTRALISÉ ---
 let connexions = []; 
 let config = { nbHumains: 2 }; 
 let partieEnCours = false;
@@ -19,12 +18,16 @@ let joueurActif = 0;
 let nbPassesCons = 0;
 let maitreDuPli = 0;
 
+// Variables pour le Tribut (Échange de cartes)
+let dernierGagnant = null;
+let dernierPerdant = null;
+let phaseEchange = false;
+
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
 function genererPaquet() {
     let paquet = [];
     let idCounter = 0;
-    // Ajout d'un ID unique par carte pour éviter les conflits de doublons
     for (let c of couleurs) {
         for (let v = 1; v <= 10; v++) {
             paquet.push({ id: `c_${idCounter++}`, valeurSort: v, rang: v, couleur: c, type: 'Normal' });
@@ -32,8 +35,9 @@ function genererPaquet() {
         }
     }
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 1.5, rang: 1, couleur: 'Special', classe: 'Multi', type: 'Special', display: '1' });
-    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: 'V' });
-    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: 'J' });
+    // CORRECTION : Affichage Ph pour Phénix
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: 'Ph' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: 'Ph' });
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 12, rang: 12, couleur: 'Rouge', classe: 'Dragon', type: 'Special', display: '🐉' });
     return paquet;
 }
@@ -43,7 +47,10 @@ function trierCartes(main) {
     return main.sort((a, b) => (a.valeurSort - b.valeurSort) || (ordreCouleurs[a.couleur] - ordreCouleurs[b.couleur]));
 }
 
-function getPuissanceCarte(rang, couleur) {
+function getPuissanceCarte(rang, couleur, classe = null) {
+    if (classe === 'Dragon') return 999;
+    if (classe === 'PhenixJ') return 998;
+    if (classe === 'PhenixV') return 997;
     const poidsCouleur = { 'Vert': 0.1, 'Jaune': 0.2, 'Rouge': 0.3, 'Special': 0.4 };
     return rang + (poidsCouleur[couleur] || 0);
 }
@@ -56,7 +63,6 @@ function analyserCombinaison(cartesJouees) {
     let rangBase = cartesJouees[0].rang;
     let estIdentique = cartesJouees.every(c => c.rang === rangBase);
 
-    // GANGS (4 à 7 cartes identiques)
     if (estIdentique && nb >= 4) {
         combo.format = nb;
         combo.puissance = (nb * 100) + rangBase; 
@@ -65,19 +71,17 @@ function analyserCombinaison(cartesJouees) {
         return combo;
     }
 
-    // COMBINAISONS CLASSIQUES (1, 2, 3 identiques)
     if (estIdentique && nb < 4) {
         combo.format = nb;
         let cartePlusForte = cartesJouees[0];
         cartesJouees.forEach(c => {
-            if(getPuissanceCarte(c.rang, c.couleur) > getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur)) cartePlusForte = c;
+            if(getPuissanceCarte(c.rang, c.couleur, c.classe) > getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur, cartePlusForte.classe)) cartePlusForte = c;
         });
-        combo.puissance = getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur);
+        combo.puissance = getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur, cartePlusForte.classe);
         combo.nom = (nb === 1) ? "Carte Seule" : (nb === 2) ? "Paire" : "Brelan";
         return combo;
     }
 
-    // COMBINAISONS DE 5 CARTES
     if (nb === 5) {
         let contientSpecial = cartesJouees.some(c => c.type === 'Special');
         if (contientSpecial) return null;
@@ -94,8 +98,7 @@ function analyserCombinaison(cartesJouees) {
 
         if (isSuite && isCouleur) {
             combo.nom = "🌟 QUINTE FLUSH 🌟";
-            combo.puissance = 300 + getPuissanceCarte(carteMax.rang, carteMax.couleur);
-            combo.isGang = false; 
+            combo.puissance = 300 + getPuissanceCarte(carteMax.rang, carteMax.couleur, carteMax.classe);
             return combo;
         }
         if (isFull) {
@@ -105,12 +108,12 @@ function analyserCombinaison(cartesJouees) {
         }
         if (isCouleur) {
             combo.nom = "Couleur";
-            combo.puissance = 100 + getPuissanceCarte(carteMax.rang, carteMax.couleur);
+            combo.puissance = 100 + getPuissanceCarte(carteMax.rang, carteMax.couleur, carteMax.classe);
             return combo;
         }
         if (isSuite) {
             combo.nom = "Suite";
-            combo.puissance = getPuissanceCarte(carteMax.rang, carteMax.couleur);
+            combo.puissance = getPuissanceCarte(carteMax.rang, carteMax.couleur, carteMax.classe);
             return combo;
         }
     }
@@ -119,11 +122,7 @@ function analyserCombinaison(cartesJouees) {
 
 function attribuerNomsIA() {
     let countIA = 1;
-    for(let i=0; i<4; i++) {
-        if(typesJoueurs[i] === 'ia') {
-            nomsJoueurs[i] = `IA ${countIA++}`;
-        }
-    }
+    for(let i=0; i<4; i++) { if(typesJoueurs[i] === 'ia') nomsJoueurs[i] = `IA ${countIA++}`; }
 }
 
 function demarrerNouvelleManche() {
@@ -132,17 +131,47 @@ function demarrerNouvelleManche() {
         let j = Math.floor(Math.random() * (i + 1));
         let temp = paquet[i]; paquet[i] = paquet[j]; paquet[j] = temp;
     }
-
-    for (let i = 0; i < 4; i++) {
-        mains[i] = trierCartes(paquet.slice(i * 16, (i + 1) * 16));
-    }
+    for (let i = 0; i < 4; i++) { mains[i] = trierCartes(paquet.slice(i * 16, (i + 1) * 16)); }
 
     etatTable = null;
     nbPassesCons = 0;
     maitreDuPli = 0;
-    joueurActif = 0;
-    partieEnCours = true;
 
+    // RÈGLE DU TRIBUT
+    if (dernierGagnant !== null && dernierPerdant !== null) {
+        // Le perdant donne sa meilleure carte
+        let mainPerdant = mains[dernierPerdant];
+        let bestIndex = 0; let bestPower = 0;
+        mainPerdant.forEach((c, i) => {
+            let p = getPuissanceCarte(c.rang, c.couleur, c.classe);
+            if(p > bestPower) { bestPower = p; bestIndex = i; }
+        });
+        
+        let carteDonnee = mainPerdant.splice(bestIndex, 1)[0];
+        mains[dernierGagnant].push(carteDonnee);
+        mains[dernierGagnant] = trierCartes(mains[dernierGagnant]);
+
+        // Si le gagnant est une IA, elle rend sa carte la plus faible automatiquement
+        if (typesJoueurs[dernierGagnant] === 'ia') {
+            let pireCarte = mains[dernierGagnant].splice(0, 1)[0];
+            mains[dernierPerdant].push(pireCarte);
+            mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
+            lancerPartie();
+        } else {
+            // Le joueur humain doit choisir
+            phaseEchange = true;
+            synchroniserToutLeMonde();
+            io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
+        }
+    } else {
+        lancerPartie();
+    }
+}
+
+function lancerPartie() {
+    phaseEchange = false;
+    joueurActif = dernierGagnant !== null ? dernierGagnant : 0; // Le gagnant commence
+    partieEnCours = true;
     synchroniserToutLeMonde();
     verifierTourIA();
 }
@@ -151,41 +180,56 @@ function synchroniserToutLeMonde() {
     for (let i = 0; i < 4; i++) {
         if (typesJoueurs[i] === 'humain' && connexions[i]) {
             io.to(connexions[i]).emit('etatPartie', {
-                votreIndex: i,
-                maMain: mains[i],
-                joueurActif: joueurActif,
-                etatTable: etatTable,
-                taillesMains: mains.map(m => m.length),
-                scoresGlobaux: scoresGlobaux,
-                typesJoueurs: typesJoueurs,
-                nomsJoueurs: nomsJoueurs,
-                nbPassesCons: nbPassesCons
+                votreIndex: i, maMain: mains[i], joueurActif: joueurActif,
+                etatTable: etatTable, taillesMains: mains.map(m => m.length),
+                scoresGlobaux: scoresGlobaux, nomsJoueurs: nomsJoueurs,
+                phaseEchange: phaseEchange, dernierGagnant: dernierGagnant
             });
         }
     }
 }
 
 function verifierTourIA() {
-    if (!partieEnCours) return;
-    if (typesJoueurs[joueurActif] === 'ia') {
-        setTimeout(faireJouerIA, 1500);
-    }
+    if (!partieEnCours || phaseEchange) return;
+    if (typesJoueurs[joueurActif] === 'ia') setTimeout(faireJouerIA, 1500);
 }
 
+// CORRECTION : IA PLUS INTELLIGENTE
 function faireJouerIA() {
     let mainIA = mains[joueurActif];
     let aJoue = false;
     let comboA_Jouer = [];
 
+    // Grouper les cartes par rang pour trouver paires/brelans
+    let groupes = {};
+    mainIA.forEach(c => {
+        if(!groupes[c.rang]) groupes[c.rang] = [];
+        groupes[c.rang].push(c);
+    });
+
     if (etatTable === null) {
-        comboA_Jouer = [mainIA[0]];
+        // Ouverture : L'IA essaie de jouer une paire si elle en a une, sinon sa plus petite carte
+        let paire = Object.values(groupes).find(g => g.length === 2);
+        if (paire) comboA_Jouer = paire;
+        else comboA_Jouer = [mainIA[0]]; 
     } else {
-        if (etatTable.format === 1) {
+        let fDemande = etatTable.format;
+        let pDemande = etatTable.puissance;
+
+        if (fDemande === 1) {
             for (let i = 0; i < mainIA.length; i++) {
-                let c = mainIA[i];
-                if (getPuissanceCarte(c.rang, c.couleur) > etatTable.puissance) {
-                    comboA_Jouer = [c];
-                    break;
+                if (getPuissanceCarte(mainIA[i].rang, mainIA[i].couleur, mainIA[i].classe) > pDemande) {
+                    comboA_Jouer = [mainIA[i]]; break;
+                }
+            }
+        } else if (fDemande === 2 || fDemande === 3) {
+            // Cherche une paire ou un brelan plus fort
+            let formatsValides = Object.values(groupes).filter(g => g.length >= fDemande);
+            for (let g of formatsValides) {
+                let comboTest = g.slice(0, fDemande);
+                let info = analyserCombinaison(comboTest);
+                if (info && info.puissance > pDemande) {
+                    comboA_Jouer = comboTest; break;
                 }
             }
         }
@@ -198,101 +242,83 @@ function faireJouerIA() {
                 let idx = mainIA.findIndex(m => m.id === c.id);
                 if (idx > -1) mainIA.splice(idx, 1);
             });
-            etatTable = info;
-            etatTable.cartes = comboA_Jouer;
-            etatTable.nomProprio = nomsJoueurs[joueurActif];
-            nbPassesCons = 0;
-            maitreDuPli = joueurActif;
-            aJoue = true;
+            etatTable = info; etatTable.cartes = comboA_Jouer; etatTable.nomProprio = nomsJoueurs[joueurActif];
+            nbPassesCons = 0; maitreDuPli = joueurActif; aJoue = true;
         }
     }
 
     if (!aJoue) nbPassesCons++;
 
-    if (mainIA.length === 0) {
-        partieTerminee(joueurActif);
-        return;
-    }
-
+    if (mainIA.length === 0) { partieTerminee(joueurActif); return; }
     passerAuJoueurSuivant();
 }
 
 function passerAuJoueurSuivant() {
-    if (nbPassesCons >= 3) {
-        etatTable = null;
-        nbPassesCons = 0;
-        joueurActif = maitreDuPli;
-    } else {
-        joueurActif = (joueurActif + 1) % 4;
-    }
-    synchroniserToutLeMonde();
-    verifierTourIA();
+    if (nbPassesCons >= 3) { etatTable = null; nbPassesCons = 0; joueurActif = maitreDuPli; }
+    else { joueurActif = (joueurActif + 1) % 4; }
+    synchroniserToutLeMonde(); verifierTourIA();
 }
 
 function partieTerminee(gagnant) {
     partieEnCours = false;
+    dernierGagnant = gagnant;
+    
+    // Identifier le perdant (celui qui a le plus de cartes)
+    let maxCartes = -1; dernierPerdant = 0;
+    mains.forEach((m, i) => { if(m.length > maxCartes) { maxCartes = m.length; dernierPerdant = i; } });
+
     let penalites = mains.map(m => {
         let n = m.length;
-        if (n === 0) return 0;
-        if (n <= 7) return n;
-        if (n <= 9) return n * 2;
-        if (n <= 15) return n * 3;
-        return n * 4;
+        if (n <= 7) return n; if (n <= 9) return n * 2; if (n <= 15) return n * 3; return n * 4;
     });
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
 
-    io.emit('finManche', {
-        gagnant: gagnant,
-        nomGagnant: nomsJoueurs[gagnant],
-        penalites: penalites,
-        scoresGlobaux: scoresGlobaux
-    });
+    io.emit('finManche', { gagnant: gagnant, nomGagnant: nomsJoueurs[gagnant], scoresGlobaux: scoresGlobaux });
 }
 
 io.on('connection', (socket) => {
-    if (connexions.length === 0) {
-        socket.emit('statutHote', true);
-    } else {
-        socket.emit('statutHote', false);
-    }
+    if (connexions.length === 0) socket.emit('statutHote', true);
+    else socket.emit('statutHote', false);
 
     socket.on('configurerPartie', (data) => {
         config.nbHumains = parseInt(data.nbHumains);
-        connexions = [socket.id];
-        typesJoueurs = ['humain', 'ia', 'ia', 'ia'];
+        connexions = [socket.id]; typesJoueurs = ['humain', 'ia', 'ia', 'ia'];
         nomsJoueurs = ['IA 1', 'IA 2', 'IA 3', 'IA 4'];
         nomsJoueurs[0] = data.pseudo || "Joueur 1";
         
-        for(let i=1; i < config.nbHumains; i++) {
-            typesJoueurs[i] = 'humain';
-            nomsJoueurs[i] = 'En attente...';
-        }
+        for(let i=1; i < config.nbHumains; i++) { typesJoueurs[i] = 'humain'; nomsJoueurs[i] = 'En attente...'; }
 
-        if (connexions.length === config.nbHumains) {
-            attribuerNomsIA();
-            demarrerNouvelleManche();
-        } else {
-            io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
-        }
+        if (connexions.length === config.nbHumains) { attribuerNomsIA(); demarrerNouvelleManche(); }
+        else { io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains }); }
     });
 
     socket.on('rejoindrePartie', (data) => {
         if (connexions.length < config.nbHumains && !connexions.includes(socket.id)) {
-            let index = connexions.length;
-            connexions.push(socket.id);
+            let index = connexions.length; connexions.push(socket.id);
             nomsJoueurs[index] = data.pseudo || `Joueur ${index + 1}`;
+            if (connexions.length === config.nbHumains) { attribuerNomsIA(); demarrerNouvelleManche(); }
+            else { io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains }); }
+        }
+    });
 
-            if (connexions.length === config.nbHumains) {
-                attribuerNomsIA();
-                demarrerNouvelleManche();
-            } else {
-                io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
-            }
+    // RÈGLE DU TRIBUT : ACTION DU GAGNANT
+    socket.on('actionDonnerCarte', (carteId) => {
+        if (!phaseEchange) return;
+        let monIndex = connexions.indexOf(socket.id);
+        if (monIndex !== dernierGagnant) return;
+
+        let idx = mains[monIndex].findIndex(c => c.id === carteId);
+        if (idx > -1) {
+            let carteDonnee = mains[monIndex].splice(idx, 1)[0];
+            mains[dernierPerdant].push(carteDonnee);
+            mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
+            lancerPartie();
         }
     });
 
     socket.on('actionJouer', (cartesSelectionnees) => {
+        if (phaseEchange) return;
         let monIndex = connexions.indexOf(socket.id);
         if (monIndex !== joueurActif) return;
 
@@ -300,9 +326,8 @@ io.on('connection', (socket) => {
         if (!info) { socket.emit('erreur', 'Combinaison invalide !'); return; }
 
         if (etatTable !== null) {
-            if (info.isGang) {
-                if (etatTable.isGang && info.puissance <= etatTable.puissance) { socket.emit('erreur', 'Ton Gang est trop faible !'); return; }
-            } else {
+            if (info.isGang) { if (etatTable.isGang && info.puissance <= etatTable.puissance) { socket.emit('erreur', 'Ton Gang est trop faible !'); return; } } 
+            else {
                 if (etatTable.isGang) { socket.emit('erreur', 'Il te faut un Gang pour couper !'); return; }
                 if (info.format !== etatTable.format) { socket.emit('erreur', 'Format incorrect.'); return; }
                 if (info.puissance <= etatTable.puissance) { socket.emit('erreur', 'Combinaison trop faible.'); return; }
@@ -314,43 +339,23 @@ io.on('connection', (socket) => {
             if (idx > -1) mains[monIndex].splice(idx, 1);
         });
 
-        etatTable = info;
-        etatTable.cartes = cartesSelectionnees;
-        etatTable.nomProprio = nomsJoueurs[monIndex];
-        nbPassesCons = 0;
-        maitreDuPli = monIndex;
+        etatTable = info; etatTable.cartes = cartesSelectionnees; etatTable.nomProprio = nomsJoueurs[monIndex];
+        nbPassesCons = 0; maitreDuPli = monIndex;
 
-        if (mains[monIndex].length === 0) {
-            partieTerminee(monIndex);
-            return;
-        }
-
+        if (mains[monIndex].length === 0) { partieTerminee(monIndex); return; }
         passerAuJoueurSuivant();
     });
 
     socket.on('actionPasser', () => {
+        if (phaseEchange) return;
         let monIndex = connexions.indexOf(socket.id);
         if (monIndex !== joueurActif) return;
         if (etatTable === null) { socket.emit('erreur', 'Tu dois ouvrir le pli !'); return; }
 
-        nbPassesCons++;
-        passerAuJoueurSuivant();
+        nbPassesCons++; passerAuJoueurSuivant();
     });
 
-    socket.on('demandeNouvelleManche', () => {
-        demarrerNouvelleManche();
-    });
-
-    socket.on('disconnect', () => {
-        let idx = connexions.indexOf(socket.id);
-        if(idx > -1) {
-            connexions.splice(idx, 1);
-            nomsJoueurs[idx] = "Déconnecté";
-        }
-        io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
-    });
+    socket.on('demandeNouvelleManche', () => { demarrerNouvelleManche(); });
 });
 
-http.listen(3000, () => {
-    console.log('Serveur Arbitre Gang of Four en ligne sur le port 3000');
-});
+http.listen(3000, () => { console.log('Serveur en ligne'); });
