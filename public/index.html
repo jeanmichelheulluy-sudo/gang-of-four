@@ -16,15 +16,11 @@
         .carte { width: 55px; height: 85px; background-color: #f7f4eb; border-radius: 6px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #c8bfa5; cursor: pointer; color: black; font-weight: bold; position: relative; }
         .carte.selected { transform: translateY(-15px); border: 2px solid #3498db; }
         
-        /* Couleurs standards */
         .Vert { color: #1a6b3c; } .Jaune { color: #dcb315; } .Rouge { color: #b02126; }
         .Multi { background: linear-gradient(135deg, #e8f5e9, #fff9c4, #ffebee) !important; border: 2px solid #8e44ad !important; }
         
-        /* NOEUVEAU: Les Phénix avec des fonds très distincts pour qu'on ne puisse pas les confondre */
         .PhenixV { background-color: #d4efdf !important; border: 2px solid #27ae60 !important; color: #1a6b3c !important; }
         .PhenixJ { background-color: #fcf3cf !important; border: 2px solid #f1c40f !important; color: #dcb315 !important; }
-        
-        /* Le filtre rouge magique pour le Dragon */
         .Dragon .center, .Dragon .corner { filter: drop-shadow(0px 0px 3px red) sepia(1) hue-rotate(-50deg) saturate(5); }
 
         .corner { font-size: 0.7em; padding: 2px; position: absolute; } .top-left { top: 0; left: 0; } .bottom-right { bottom: 0; right: 0; transform: rotate(180deg); }
@@ -32,6 +28,9 @@
         button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; }
         button:disabled { background-color: #95a5a6; cursor: not-allowed; }
         input[type="text"] { padding: 8px; font-size: 1em; border-radius: 5px; border: none; text-align: center; margin-bottom: 15px; width: 80%; }
+        
+        /* BANDEAU HISTORIQUE DU TRIBUT */
+        .box-tribut { background: rgba(241, 196, 15, 0.2); border: 1px solid #f1c40f; padding: 8px; border-radius: 6px; margin: 10px auto; max-width: 580px; font-size: 0.9em; color: #f39c12; font-weight: bold; display: none; }
     </style>
 </head>
 <body>
@@ -66,6 +65,8 @@
     <div id="score-bar" class="score-bar" style="display:none;">
         <span id="sc-0">-</span><span id="sc-1">-</span><span id="sc-2">-</span><span id="sc-3">-</span>
     </div>
+
+    <div id="zone-tribut" class="box-tribut"></div>
 
     <div id="tapis" class="table-jeu">
         <div class="adversaire" id="box-ia2">-</div>
@@ -140,6 +141,15 @@
 
             monIndexJoueur = data.votreIndex;
             cartesSelectionnees = [];
+
+            // Affichage de l'historique du Tribut s'il existe
+            let divTribut = document.getElementById('zone-tribut');
+            if(data.messageTribut) {
+                divTribut.innerText = data.messageTribut;
+                divTribut.style.display = 'block';
+            } else {
+                divTribut.style.display = 'none';
+            }
 
             for(let i=0; i<4; i++) { 
                 document.getElementById(`sc-${i}`).innerText = `${data.nomsJoueurs[i]} : ${data.scoresGlobaux[i]} pts`; 
