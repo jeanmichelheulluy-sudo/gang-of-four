@@ -6,12 +6,13 @@ const io = require('socket.io')(http);
 app.use(express.static('public'));
 
 // --- ÉTAT DU JEU CENTRALISÉ ---
-let connexions = []; // Liste des socket.id des humains
-let config = { nbHumains: 2, prepra: true }; // Par défaut 2 humains
+let connexions = []; 
+let config = { nbHumains: 2 }; 
 let partieEnCours = false;
 
 let mains = [[], [], [], []]; 
-let typesJoueurs = ['ia', 'ia', 'ia', 'ia']; // 'humain' ou 'ia'
+let typesJoueurs = ['ia', 'ia', 'ia', 'ia']; 
+let nomsJoueurs = ['IA 1', 'IA 2', 'IA 3', 'IA 4'];
 let scoresGlobaux = [0, 0, 0, 0];
 let etatTable = null;
 let joueurActif = 0;
@@ -22,16 +23,18 @@ const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
 function genererPaquet() {
     let paquet = [];
+    let idCounter = 0;
+    // Ajout d'un ID unique par carte pour éviter les conflits de doublons
     for (let c of couleurs) {
         for (let v = 1; v <= 10; v++) {
-            paquet.push({ valeurSort: v, rang: v, couleur: c, type: 'Normal' });
-            paquet.push({ valeurSort: v, rang: v, couleur: c, type: 'Normal' });
+            paquet.push({ id: `c_${idCounter++}`, valeurSort: v, rang: v, couleur: c, type: 'Normal' });
+            paquet.push({ id: `c_${idCounter++}`, valeurSort: v, rang: v, couleur: c, type: 'Normal' });
         }
     }
-    paquet.push({ valeurSort: 1.5, rang: 1, couleur: 'Special', classe: 'Multi', type: 'Special', display: '1' });
-    paquet.push({ valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: 'V' });
-    paquet.push({ valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: 'J' });
-    paquet.push({ valeurSort: 12, rang: 12, couleur: 'Rouge', classe: 'Dragon', type: 'Special', display: '🐉' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 1.5, rang: 1, couleur: 'Special', classe: 'Multi', type: 'Special', display: '1' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: 'V' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: 'J' });
+    paquet.push({ id: `c_${idCounter++}`, valeurSort: 12, rang: 12, couleur: 'Rouge', classe: 'Dragon', type: 'Special', display: '🐉' });
     return paquet;
 }
 
@@ -92,7 +95,7 @@ function analyserCombinaison(cartesJouees) {
         if (isSuite && isCouleur) {
             combo.nom = "🌟 QUINTE FLUSH 🌟";
             combo.puissance = 300 + getPuissanceCarte(carteMax.rang, carteMax.couleur);
-            combo.isGang = false; // DEMANDE UTILISATEUR : CE N'EST PAS UN GANG
+            combo.isGang = false; 
             return combo;
         }
         if (isFull) {
@@ -112,6 +115,15 @@ function analyserCombinaison(cartesJouees) {
         }
     }
     return null;
+}
+
+function attribuerNomsIA() {
+    let countIA = 1;
+    for(let i=0; i<4; i++) {
+        if(typesJoueurs[i] === 'ia') {
+            nomsJoueurs[i] = `IA ${countIA++}`;
+        }
+    }
 }
 
 function demarrerNouvelleManche() {
@@ -146,6 +158,7 @@ function synchroniserToutLeMonde() {
                 taillesMains: mains.map(m => m.length),
                 scoresGlobaux: scoresGlobaux,
                 typesJoueurs: typesJoueurs,
+                nomsJoueurs: nomsJoueurs,
                 nbPassesCons: nbPassesCons
             });
         }
@@ -165,10 +178,8 @@ function faireJouerIA() {
     let comboA_Jouer = [];
 
     if (etatTable === null) {
-        // Ouverture simple : joue la plus petite carte seule
         comboA_Jouer = [mainIA[0]];
     } else {
-        // Riposte simple : cherche une carte seule plus forte
         if (etatTable.format === 1) {
             for (let i = 0; i < mainIA.length; i++) {
                 let c = mainIA[i];
@@ -184,21 +195,19 @@ function faireJouerIA() {
         let info = analyserCombinaison(comboA_Jouer);
         if (info) {
             comboA_Jouer.forEach(c => {
-                let idx = mainIA.findIndex(m => m.valeurSort === c.valeurSort && m.couleur === c.couleur);
+                let idx = mainIA.findIndex(m => m.id === c.id);
                 if (idx > -1) mainIA.splice(idx, 1);
             });
             etatTable = info;
             etatTable.cartes = comboA_Jouer;
-            etatTable.nomProprio = `IA ${joueurActif}`;
+            etatTable.nomProprio = nomsJoueurs[joueurActif];
             nbPassesCons = 0;
             maitreDuPli = joueurActif;
             aJoue = true;
         }
     }
 
-    if (!aJoue) {
-        nbPassesCons++;
-    }
+    if (!aJoue) nbPassesCons++;
 
     if (mainIA.length === 0) {
         partieTerminee(joueurActif);
@@ -235,47 +244,50 @@ function partieTerminee(gagnant) {
 
     io.emit('finManche', {
         gagnant: gagnant,
+        nomGagnant: nomsJoueurs[gagnant],
         penalites: penalites,
         scoresGlobaux: scoresGlobaux
     });
 }
 
-// --- GESTION DES JOUEURS CONNECTÉS ---
 io.on('connection', (socket) => {
-    console.log('Connexion d\'un appareil : ' + socket.id);
-
-    // Le premier joueur devient le Host (Chef de table)
     if (connexions.length === 0) {
         socket.emit('statutHote', true);
     } else {
         socket.emit('statutHote', false);
     }
 
-socket.on('configurerPartie', (data) => {
+    socket.on('configurerPartie', (data) => {
         config.nbHumains = parseInt(data.nbHumains);
-        // Assigner les places
         connexions = [socket.id];
         typesJoueurs = ['humain', 'ia', 'ia', 'ia'];
+        nomsJoueurs = ['IA 1', 'IA 2', 'IA 3', 'IA 4'];
+        nomsJoueurs[0] = data.pseudo || "Joueur 1";
         
         for(let i=1; i < config.nbHumains; i++) {
-            typesJoueurs[i] = 'humain'; // En attente de vrais joueurs
+            typesJoueurs[i] = 'humain';
+            nomsJoueurs[i] = 'En attente...';
         }
 
-        // CORRECTION : Si on a choisi 1 seul humain, on lance tout de suite !
         if (connexions.length === config.nbHumains) {
+            attribuerNomsIA();
             demarrerNouvelleManche();
         } else {
             io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
         }
     });
 
-    socket.on('rejoindrePartie', () => {
+    socket.on('rejoindrePartie', (data) => {
         if (connexions.length < config.nbHumains && !connexions.includes(socket.id)) {
+            let index = connexions.length;
             connexions.push(socket.id);
-            io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
+            nomsJoueurs[index] = data.pseudo || `Joueur ${index + 1}`;
 
             if (connexions.length === config.nbHumains) {
+                attribuerNomsIA();
                 demarrerNouvelleManche();
+            } else {
+                io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
             }
         }
     });
@@ -297,15 +309,14 @@ socket.on('configurerPartie', (data) => {
             }
         }
 
-        // Retirer les cartes de la main
         cartesSelectionnees.forEach(c => {
-            let idx = mains[monIndex].findIndex(m => m.valeurSort === c.valeurSort && m.couleur === c.couleur);
+            let idx = mains[monIndex].findIndex(m => m.id === c.id);
             if (idx > -1) mains[monIndex].splice(idx, 1);
         });
 
         etatTable = info;
         etatTable.cartes = cartesSelectionnees;
-        etatTable.nomProprio = `Joueur ${monIndex + 1}`;
+        etatTable.nomProprio = nomsJoueurs[monIndex];
         nbPassesCons = 0;
         maitreDuPli = monIndex;
 
@@ -331,7 +342,11 @@ socket.on('configurerPartie', (data) => {
     });
 
     socket.on('disconnect', () => {
-        connexions = connexions.filter(id => id !== socket.id);
+        let idx = connexions.indexOf(socket.id);
+        if(idx > -1) {
+            connexions.splice(idx, 1);
+            nomsJoueurs[idx] = "Déconnecté";
+        }
         io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
     });
 });
