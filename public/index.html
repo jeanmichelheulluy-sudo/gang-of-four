@@ -15,8 +15,14 @@
         .zone-cartes { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-height: 100px; }
         .carte { width: 55px; height: 85px; background-color: #f7f4eb; border-radius: 6px; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #c8bfa5; cursor: pointer; color: black; font-weight: bold; position: relative; }
         .carte.selected { transform: translateY(-15px); border: 2px solid #3498db; }
+        
+        /* Couleurs standards */
         .Vert { color: #1a6b3c; } .Jaune { color: #dcb315; } .Rouge { color: #b02126; }
         .Multi { background: linear-gradient(135deg, #e8f5e9, #fff9c4, #ffebee) !important; border: 2px solid #8e44ad !important; }
+        
+        /* Le filtre rouge magique pour le Dragon */
+        .Dragon .center, .Dragon .corner { filter: drop-shadow(0px 0px 3px red) sepia(1) hue-rotate(-50deg) saturate(5); }
+
         .corner { font-size: 0.7em; padding: 2px; position: absolute; } .top-left { top: 0; left: 0; } .bottom-right { bottom: 0; right: 0; transform: rotate(180deg); }
         .center { font-size: 1.8em; display: flex; justify-content: center; align-items: center; height: 100%; }
         button { background-color: #e67e22; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 5px; cursor: pointer; margin: 5px; }
@@ -83,10 +89,11 @@
         const socket = io();
         let monIndexJoueur = null;
         let cartesSelectionnees = [];
+        let modeEchange = false;
 
         socket.on('statutHote', (isHote) => {
-            if(isHote) {
-                document.getElementById('zone-hote').style.display = 'block';
+            if(isHote) { 
+                document.getElementById('zone-hote').style.display = 'block'; 
             } else {
                 document.getElementById('zone-attente').style.display = 'block';
                 document.getElementById('btn-rejoindre').style.display = 'inline-block';
@@ -113,6 +120,15 @@
             document.getElementById('txt-attente').innerText = `Joueurs connectés : ${data.connectes} / ${data.requis}`;
         });
 
+        socket.on('demandeEchange', (carteRecue) => {
+            modeEchange = true;
+            let nomCarte = carteRecue.display || carteRecue.rang;
+            document.getElementById('annonce-table').innerText = `🎁 TRIBUT ! Tu as reçu le ${nomCarte} ! Choisis une carte à rendre.`;
+            document.getElementById('btn-jouer').innerText = "Rendre la carte";
+            document.getElementById('btn-jouer').disabled = false;
+            document.getElementById('btn-passer').style.display = 'none';
+        });
+
         socket.on('etatPartie', (data) => {
             document.getElementById('ecran-connexion').style.display = 'none';
             document.getElementById('score-bar').style.display = 'flex';
@@ -121,12 +137,10 @@
             monIndexJoueur = data.votreIndex;
             cartesSelectionnees = [];
 
-            // Affichage des scores globaux avec les vrais noms
-            for(let i=0; i<4; i++) {
-                document.getElementById(`sc-${i}`).innerText = `${data.nomsJoueurs[i]} : ${data.scoresGlobaux[i]} pts`;
+            for(let i=0; i<4; i++) { 
+                document.getElementById(`sc-${i}`).innerText = `${data.nomsJoueurs[i]} : ${data.scoresGlobaux[i]} pts`; 
             }
 
-            // Répartition sur le tapis visuel autour de soi
             let mapping = [
                 { id: 'box-ia1', idx: (monIndexJoueur + 1) % 4 },
                 { id: 'box-ia2', idx: (monIndexJoueur + 2) % 4 },
@@ -137,39 +151,41 @@
                 let div = document.getElementById(m.id);
                 div.innerText = `${data.nomsJoueurs[m.idx]} : ${data.taillesMains[m.idx]} cartes`;
                 div.classList.remove('tour-actif');
-                if(data.joueurActif === m.idx) div.classList.add('tour-actif');
+                if(!data.phaseEchange && data.joueurActif === m.idx) div.classList.add('tour-actif');
             });
 
-            // Annonce dynamique du tour actif
-            if(data.joueurActif === monIndexJoueur) {
-                document.getElementById('annonce-table').innerText = "👑 À TOI DE JOUER !";
-                document.getElementById('btn-jouer').disabled = false;
-                document.getElementById('btn-passer').disabled = false;
-            } else {
-                document.getElementById('annonce-table').innerText = `Tour de : ${data.nomsJoueurs[data.joueurActif]}`;
+            if (!data.phaseEchange) {
+                document.getElementById('btn-jouer').innerText = "Jouer";
+                document.getElementById('btn-passer').style.display = 'inline-block';
+
+                if(data.joueurActif === monIndexJoueur) {
+                    document.getElementById('annonce-table').innerText = "👑 À TOI DE JOUER !";
+                    document.getElementById('btn-jouer').disabled = false;
+                    document.getElementById('btn-passer').disabled = false;
+                } else {
+                    document.getElementById('annonce-table').innerText = `Tour de : ${data.nomsJoueurs[data.joueurActif]}`;
+                    document.getElementById('btn-jouer').disabled = true;
+                    document.getElementById('btn-passer').disabled = true;
+                }
+            } else if (data.dernierGagnant !== monIndexJoueur) {
+                document.getElementById('annonce-table').innerText = "Attente du choix de Tribut du gagnant...";
                 document.getElementById('btn-jouer').disabled = true;
                 document.getElementById('btn-passer').disabled = true;
             }
 
-            // Centre de la table
             let tableCentre = document.getElementById('table-centre');
             tableCentre.innerHTML = "";
             if(data.etatTable) {
                 document.getElementById('annonce-table').innerText = `${data.etatTable.nomProprio} a posé : ${data.etatTable.nom}`;
-                data.etatTable.cartes.forEach(c => {
-                    tableCentre.appendChild(creerVisuelCarte(c, false));
-                });
-            } else {
+                data.etatTable.cartes.forEach(c => { tableCentre.appendChild(creerVisuelCarte(c, false)); });
+            } else if (!data.phaseEchange) {
                 tableCentre.innerHTML = '<span style="color:#27ae60; font-style:italic;">Table vide - Nouveau Pli</span>';
             }
 
-            // Affichage de ma main personnelle
             let zoneMain = document.getElementById('ma-zone-cartes');
             zoneMain.innerHTML = "";
             document.getElementById('txt-compteur').innerText = data.maMain.length;
-            data.maMain.forEach(c => {
-                zoneMain.appendChild(creerVisuelCarte(c, true));
-            });
+            data.maMain.forEach(c => { zoneMain.appendChild(creerVisuelCarte(c, true)); });
         });
 
         function creerVisuelCarte(carte, cliquable) {
@@ -181,7 +197,6 @@
             if(cliquable) {
                 div.onclick = function() {
                     div.classList.toggle('selected');
-                    // Tri précis par identifiant unique de carte
                     let idx = cartesSelectionnees.findIndex(c => c.id === carte.id);
                     if(idx > -1) cartesSelectionnees.splice(idx, 1);
                     else cartesSelectionnees.push(carte);
@@ -192,12 +207,18 @@
 
         function envoyerCartes() {
             if(cartesSelectionnees.length === 0) return;
+
+            if (modeEchange) {
+                if(cartesSelectionnees.length !== 1) { alert("Tu ne peux rendre qu'une seule carte !"); return; }
+                socket.emit('actionDonnerCarte', cartesSelectionnees[0].id);
+                modeEchange = false;
+                return;
+            }
+
             socket.emit('actionJouer', cartesSelectionnees);
         }
 
-        function envoyerPasser() {
-            socket.emit('actionPasser');
-        }
+        function envoyerPasser() { socket.emit('actionPasser'); }
 
         socket.on('finManche', (data) => {
             document.getElementById('annonce-table').innerText = `Manche terminée ! Gagnant : ${data.nomGagnant}`;
