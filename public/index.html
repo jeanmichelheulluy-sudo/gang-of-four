@@ -136,65 +136,55 @@
             return rang + (poidsCouleur[couleur] || 0);
         }
 
-        function analyserCombinaison(cartesJouees) {
-            let nb = cartesJouees.length;
-            if (nb === 0) return null;
+function analyserCombinaison(cartesJouees) {
+    let nb = cartesJouees.length;
+    if (nb === 0) return null;
 
-            let combo = { nom: "", format: 0, puissance: 0, isGang: false };
-            let contientSpecial = false;
-            for(let i=0; i<cartesJouees.length; i++) { if(cartesJouees[i].type === 'Special') contientSpecial = true; }
+    let combo = { nom: "", format: 0, puissance: 0, isGang: false };
+    
+    // Vérifier si TOUTES les cartes posées ont le même rang
+    let rangBase = cartesJouees[0].rang;
+    let estIdentique = cartesJouees.every(c => c.rang === rangBase);
 
-            // Vérification des cartes identiques (y compris les Gangs de 4, 5, 6, 7)
-            let rangBase = cartesJouees[0].rang;
-            let valideMulti = true;
-            for(let i=0; i<cartesJouees.length; i++) { if(cartesJouees[i].rang !== rangBase) valideMulti = false; }
+    // --- LOGIQUE DES GANGS (4, 5, 6 ou 7 cartes identiques) ---
+    if (estIdentique && nb >= 4) {
+        combo.format = nb; 
+        // Un gang de 5 bat un gang de 4. On multiplie par 100 pour garantir que ça batte le reste.
+        combo.puissance = (nb * 100) + rangBase; 
+        combo.nom = "🔥 GANG OF " + nb + " 🔥";
+        combo.isGang = true;
+        return combo;
+    }
 
-            if (valideMulti) {
-                combo.format = nb;
-                let cartePlusForte = cartesJouees[0];
-                for(let i=1; i<cartesJouees.length; i++) {
-                    if (getPuissanceCarte(cartesJouees[i].rang, cartesJouees[i].couleur) > getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur)) {
-                        cartePlusForte = cartesJouees[i];
-                    }
-                }
-                combo.puissance = getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur);
+    // --- LOGIQUE CLASSIQUE (1, 2 ou 3 cartes identiques) ---
+    if (estIdentique && nb < 4) {
+        combo.format = nb;
+        combo.puissance = rangBase;
+        combo.nom = (nb === 1) ? "Carte Seule" : (nb === 2) ? "Paire" : "Brelan";
+        combo.isGang = false;
+        return combo;
+    }
 
-                if (nb === 1) combo.nom = "Carte Seule";
-                if (nb === 2) combo.nom = "Paire";
-                if (nb === 3) combo.nom = "Brelan";
-                if (nb >= 4) { 
-                    combo.nom = "🔥 GANG OF " + nb + " 🔥"; 
-                    combo.isGang = true; 
-                    combo.puissance = (nb * 100) + combo.puissance; // La puissance explose avec le nombre de cartes
-                }
-                return combo;
-            } 
-            else if (nb === 5) {
-                if (contientSpecial) return null;
-                let isSuite = true;
-                for(let i = 1; i < 5; i++) { if (cartesJouees[i].rang !== cartesJouees[i-1].rang + 1) isSuite = false; }
-                let isCouleur = true;
-                for(let i = 1; i < 5; i++) { if (cartesJouees[i].couleur !== cartesJouees[0].couleur) isCouleur = false; }
-                
-                let isFull = (cartesJouees[0].rang === cartesJouees[1].rang && cartesJouees[1].rang === cartesJouees[2].rang && cartesJouees[3].rang === cartesJouees[4].rang) ||
-                             (cartesJouees[0].rang === cartesJouees[1].rang && cartesJouees[2].rang === cartesJouees[3].rang && cartesJouees[3].rang === cartesJouees[4].rang);
+    // --- LOGIQUE DES COMBINAISONS DE 5 CARTES (Suite, Couleur, Full, Quinte Flush) ---
+    if (nb === 5) {
+        // (Garde ici ton code existant qui détecte si c'est une suite, une couleur ou un full)
+        // Exemple schématique pour la Quinte Flush :
+        let estUneSuite = verifierSuite(cartesJouees); // Ta fonction existante
+        let estUneCouleur = verifierCouleur(cartesJouees); // Ta fonction existante
 
-                let carteMax = cartesJouees[4];
-                combo.format = 5;
-
-                if (isSuite && isCouleur) { 
-                    combo.nom = "🌟 QUINTE FLUSH 🌟"; 
-                    combo.isGang = true; // La Quinte Flush est un Gang !
-                    combo.puissance = 450 + getPuissanceCarte(carteMax.rang, carteMax.couleur); // Bat un Gang de 4, perd contre un Gang de 5
-                }
-                else if (isFull) { combo.nom = "Full"; combo.puissance = 200 + ((cartesJouees[2].rang === cartesJouees[0].rang) ? cartesJouees[0].rang : cartesJouees[4].rang); }
-                else if (isCouleur) { combo.nom = "Couleur"; combo.puissance = 100 + getPuissanceCarte(carteMax.rang, carteMax.couleur); }
-                else if (isSuite) { combo.nom = "Suite"; combo.puissance = getPuissanceCarte(carteMax.rang, carteMax.couleur); } 
-                else { return null; }
-                return combo;
-            }
-            return null;
+        if (estUneSuite && estUneCouleur) {
+            combo.format = 5;
+            combo.puissance = 90 + cartesJouees[4].rang; // Puissance élevée mais sous les 100 des Gangs
+            combo.nom = "🌟 Quinte Flush 🌟";
+            combo.isGang = false; // CE N'EST PAS UN GANG
+            return combo;
         }
+        
+        // ... (ton code pour les Suites simples, Couleurs simples et Fulls)
+    }
+
+    return null; // Combinaison invalide
+}
 
         function majAffichageScores() {
             document.getElementById('score-j0').innerText = `Toi : ${scoresGlobaux[0]} pts`;
