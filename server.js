@@ -251,7 +251,7 @@ io.on('connection', (socket) => {
         socket.emit('statutHote', false);
     }
 
-    socket.on('configurerPartie', (data) => {
+socket.on('configurerPartie', (data) => {
         config.nbHumains = parseInt(data.nbHumains);
         // Assigner les places
         connexions = [socket.id];
@@ -260,7 +260,13 @@ io.on('connection', (socket) => {
         for(let i=1; i < config.nbHumains; i++) {
             typesJoueurs[i] = 'humain'; // En attente de vrais joueurs
         }
-        io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
+
+        // CORRECTION : Si on a choisi 1 seul humain, on lance tout de suite !
+        if (connexions.length === config.nbHumains) {
+            demarrerNouvelleManche();
+        } else {
+            io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains });
+        }
     });
 
     socket.on('rejoindrePartie', () => {
