@@ -18,7 +18,6 @@
         
         .Vert { color: #1a6b3c; } .Jaune { color: #dcb315; } .Rouge { color: #b02126; }
         .Multi { background: linear-gradient(135deg, #e8f5e9, #fff9c4, #ffebee) !important; border: 2px solid #8e44ad !important; }
-        
         .PhenixV { background-color: #d4efdf !important; border: 2px solid #27ae60 !important; color: #1a6b3c !important; }
         .PhenixJ { background-color: #fcf3cf !important; border: 2px solid #f1c40f !important; color: #dcb315 !important; }
         .Dragon .center, .Dragon .corner { filter: drop-shadow(0px 0px 3px red) sepia(1) hue-rotate(-50deg) saturate(5); }
@@ -60,6 +59,26 @@
         </div>
     </div>
 
+    <div id="modal-fin-manche" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#145a32; border:4px solid #f1c40f; border-radius:15px; padding:20px; width:90%; max-width:500px; text-align:center; box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+            <h2 style="color:#f1c40f; margin-top:0;">Manche Terminée !</h2>
+            <h3 id="modal-gagnant" style="color:white; margin-bottom: 20px;">Gagnant : ...</h3>
+            <table style="width:100%; color:white; border-collapse:collapse; margin:20px 0;">
+                <thead>
+                    <tr style="border-bottom:2px solid #27ae60;">
+                        <th style="padding:10px;">Joueur</th>
+                        <th style="padding:10px;">Restantes</th>
+                        <th style="padding:10px;">Pénalité</th>
+                        <th style="padding:10px;">Score</th>
+                    </tr>
+                </thead>
+                <tbody id="modal-table-body">
+                </tbody>
+            </table>
+            <button onclick="demanderSuivantModal()" style="background:#e67e22; padding:12px 24px; font-size:1.1em; border-radius:8px; border:none; color:white; cursor:pointer; font-weight:bold;">Lancer la Manche Suivante</button>
+        </div>
+    </div>
+
     <div id="score-bar" class="score-bar" style="display:none;">
         <span id="sc-0">-</span><span id="sc-1">-</span><span id="sc-2">-</span><span id="sc-3">-</span>
     </div>
@@ -83,7 +102,6 @@
         <div style="margin-top: 15px;">
             <button id="btn-jouer" onclick="envoyerCartes()">Jouer</button>
             <button id="btn-passer" onclick="envoyerPasser()">Passer</button>
-            <button id="btn-suivant" style="display:none; background:#8e44ad;" onclick="demanderSuivant()">Manche Suivante</button>
         </div>
     </div>
 
@@ -232,14 +250,28 @@
         function envoyerPasser() { socket.emit('actionPasser'); }
 
         socket.on('finManche', (data) => {
-            document.getElementById('annonce-table').innerText = `Manche terminée ! Gagnant : ${data.nomGagnant}`;
-            document.getElementById('btn-suivant').style.display = 'inline-block';
-            document.getElementById('btn-jouer').disabled = true;
-            document.getElementById('btn-passer').disabled = true;
+            // Affichage de la modale de fin de manche
+            document.getElementById('modal-fin-manche').style.display = 'flex';
+            document.getElementById('modal-gagnant').innerText = `👑 Gagnant : ${data.nomGagnant}`;
+
+            let tbody = document.getElementById('modal-table-body');
+            tbody.innerHTML = "";
+            for(let i=0; i<4; i++) {
+                let isMe = (i === monIndexJoueur);
+                let bg = isMe ? 'rgba(255,255,255,0.1)' : 'transparent';
+                tbody.innerHTML += `
+                    <tr style="background:${bg}; border-bottom:1px solid rgba(39, 174, 96, 0.5);">
+                        <td style="padding:8px;">${data.nomsJoueurs[i]} ${isMe ? '(Toi)' : ''}</td>
+                        <td style="padding:8px; text-align:center; font-weight:bold;">${data.cartesRestantes[i]}</td>
+                        <td style="padding:8px; text-align:center; color:#e74c3c; font-weight:bold;">+${data.penalites[i]}</td>
+                        <td style="padding:8px; text-align:center; font-weight:bold; color:#f1c40f;">${data.scoresGlobaux[i]}</td>
+                    </tr>
+                `;
+            }
         });
 
-        function demanderSuivant() {
-            document.getElementById('btn-suivant').style.display = 'none';
+        function demanderSuivantModal() {
+            document.getElementById('modal-fin-manche').style.display = 'none';
             socket.emit('demandeNouvelleManche');
         }
 
