@@ -5,7 +5,6 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
-// --- ÉTAT DU JEU CENTRALISÉ ---
 let connexions = []; 
 let config = { nbHumains: 2 }; 
 let partieEnCours = false;
@@ -123,7 +122,6 @@ function analyserCombinaison(cartesJouees) {
     return null;
 }
 
-// --- FONCTIONS ALGORITHMIQUES DE RECHERCHE IA ---
 function obtenirCombinaisonsDe5(main) {
     let resultats = [];
     let cartesValides = main.filter(c => c.classe !== 'Dragon' && c.classe !== 'PhenixV' && c.classe !== 'PhenixJ');
@@ -157,17 +155,17 @@ function obtenirGangs(main) {
 }
 
 function obtenirPaires(main) {
+    let paires = [];
     let groupes = {};
     main.forEach(c => { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
-    let paires = [];
     Object.values(groupes).forEach(g => { if (g.length >= 2) paires.push(g.slice(0, 2)); });
     return paires;
 }
 
 function obtenirBrelans(main) {
+    let brelans = [];
     let groupes = {};
     main.forEach(c => { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
-    let brelans = [];
     Object.values(groupes).forEach(g => { if (g.length >= 3) brelans.push(g.slice(0, 3)); });
     return brelans;
 }
@@ -256,25 +254,28 @@ function faireJouerIA() {
     let comboA_Jouer = [];
 
     if (etatTable === null) {
-        // Ouverture IA : Priorité absolue aux Gangs, puis Combinaisons de 5 (Quintes, Fulls...), Brelans, Paires, et Carte seule
-        let gangs = obtenirGangs(mainIA);
-        let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
-        let brelans = obtenirBrelans(mainIA);
+        // OUVERTURE STRATÉGIQUE (Se débarrasser des cartes faibles en priorité)
+        let pireCarte = mainIA[0]; 
         let paires = obtenirPaires(mainIA);
+        let brelans = obtenirBrelans(mainIA);
+        let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
+        combos5.sort((a, b) => a.info.puissance - b.info.puissance);
 
-        if (gangs.length > 0) {
-            comboA_Jouer = gangs[0];
-        } else if (combos5.length > 0) {
-            combos5.sort((a, b) => a.info.puissance - b.info.puissance);
+        // L'IA joue 5 cartes uniquement si c'est une combinaison très faible (puissance < 8) ou si c'est la fin de sa main
+        if (mainIA.length === 5 && combos5.length > 0) {
             comboA_Jouer = combos5[0].cartes;
-        } else if (brelans.length > 0) {
-            comboA_Jouer = brelans[0];
-        } else if (paires.length > 0) {
-            comboA_Jouer = paires[0];
+        } else if (combos5.length > 0 && combos5[0].info.puissance < 8) {
+            comboA_Jouer = combos5[0].cartes;
         } else {
-            comboA_Jouer = [mainIA[0]];
+            let brelanPire = brelans.find(b => b.some(c => c.id === pireCarte.id));
+            let pairePire = paires.find(p => p.some(c => c.id === pireCarte.id));
+
+            if (brelanPire) { comboA_Jouer = brelanPire; }
+            else if (pairePire) { comboA_Jouer = pairePire; }
+            else { comboA_Jouer = [pireCarte]; }
         }
     } else {
+        // RÉPONSE AU PLI
         let fDemande = etatTable.format;
         let pDemande = etatTable.puissance;
         let isGangDemande = etatTable.isGang;
@@ -293,24 +294,20 @@ function faireJouerIA() {
                 let brelans = obtenirBrelans(mainIA).map(b => ({ cartes: b, info: analyserCombinaison(b) })).filter(b => b.info && b.info.puissance > pDemande);
                 if (brelans.length > 0) { brelans.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = brelans[0].cartes; }
             } else if (fDemande === 5) {
-                // L'IA cherche parmi toutes ses combinaisons de 5 cartes (y compris Suites et Quintes Flush)
                 let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(c => c.info && c.info.puissance > pDemande);
                 if (combos5.length > 0) { combos5.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = combos5[0].cartes; }
             }
 
-            // CONTRE PAR UN GANG (Coupe)
             if (comboA_Jouer.length === 0) {
                 let gangs = obtenirGangs(mainIA).map(g => ({ cartes: g, info: analyserCombinaison(g) }));
                 if (gangs.length > 0) { gangs.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = gangs[0].cartes; }
             }
         } else {
-            // Surenchère sur un Gang existant
             let gangs = obtenirGangs(mainIA).map(g => ({ cartes: g, info: analyserCombinaison(g) })).filter(g => g.info && g.info.puissance > pDemande);
             if (gangs.length > 0) { gangs.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = gangs[0].cartes; }
         }
     }
 
-    // Exécution du pli si validé par les règles
     if (comboA_Jouer.length > 0) {
         let info = analyserCombinaison(comboA_Jouer);
         if (info) {
@@ -336,19 +333,24 @@ function faireJouerIA() {
 
     if (!aJoue) nbPassesCons++;
 
-    // CRUCIAL : L'IA ne peut déclencher sa victoire que si elle a posé sa dernière carte légalement
+    // CORRECTION VISUELLE : Mettre à jour l'interface AVANT de vérifier la condition de victoire
+    synchroniserToutLeMonde();
+
     if (aJoue && mainIA.length === 0) {
         partieTerminee(joueurActif);
         return;
     }
 
-    passerAuJoueurSuivant();
+    if(partieEnCours) {
+        passerAuJoueurSuivant();
+    }
 }
 
 function passerAuJoueurSuivant() {
     if (nbPassesCons >= 3) { etatTable = null; nbPassesCons = 0; joueurActif = maitreDuPli; }
     else { joueurActif = (joueurActif + 1) % 4; }
-    synchroniserToutLeMonde(); verifierTourIA();
+    synchroniserToutLeMonde(); 
+    verifierTourIA();
 }
 
 function partieTerminee(gagnant) {
@@ -356,7 +358,11 @@ function partieTerminee(gagnant) {
     let gagnantGlobal = gagnant;
     dernierGagnant = gagnant;
     
+    // Forcer la synchronisation pour afficher 0 cartes dans la main du gagnant
+    synchroniserToutLeMonde();
+
     let maxCartes = -1; dernierPerdant = 0;
+    let cartesRestantes = mains.map(m => m.length);
     mains.forEach((m, i) => { if(m.length > maxCartes) { maxCartes = m.length; dernierPerdant = i; } });
 
     let penalites = mains.map(m => {
@@ -366,7 +372,14 @@ function partieTerminee(gagnant) {
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
 
-    io.emit('finManche', { gagnant: gagnantGlobal, nomGagnant: nomsJoueurs[gagnantGlobal], scoresGlobaux: scoresGlobaux });
+    io.emit('finManche', { 
+        gagnant: gagnantGlobal, 
+        nomGagnant: nomsJoueurs[gagnantGlobal], 
+        scoresGlobaux: scoresGlobaux,
+        penalites: penalites,
+        cartesRestantes: cartesRestantes,
+        nomsJoueurs: nomsJoueurs
+    });
 }
 
 io.on('connection', (socket) => {
@@ -378,9 +391,7 @@ io.on('connection', (socket) => {
         connexions = [socket.id]; typesJoueurs = ['humain', 'ia', 'ia', 'ia'];
         nomsJoueurs = ['IA 1', 'IA 2', 'IA 3', 'IA 4'];
         nomsJoueurs[0] = data.pseudo || "Joueur 1";
-        
         for(let i=1; i < config.nbHumains; i++) { typesJoueurs[i] = 'humain'; nomsJoueurs[i] = 'En attente...'; }
-
         if (connexions.length === config.nbHumains) { attribuerNomsIA(); demarrerNouvelleManche(); }
         else { io.emit('attenteJoueurs', { connectes: connexions.length, requis: config.nbHumains }); }
     });
@@ -406,7 +417,7 @@ io.on('connection', (socket) => {
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             
             let txtCarteRendue = (carteDonnee.display || carteDonnee.rang) + " " + carteDonnee.couleur;
-            messageTribut += ` Le gagnant humain lui a rendu [${txtCarteRendue}].`;
+            messageTribut += ` Le gagnant a rendu [${txtCarteRendue}].`;
             lancerPartie();
         }
     });
@@ -435,6 +446,8 @@ io.on('connection', (socket) => {
 
         etatTable = info; etatTable.cartes = cartesSelectionnees; etatTable.nomProprio = nomsJoueurs[monIndex];
         nbPassesCons = 0; maitreDuPli = monIndex;
+        
+        synchroniserToutLeMonde();
 
         if (mains[monIndex].length === 0) { partieTerminee(monIndex); return; }
         passerAuJoueurSuivant();
