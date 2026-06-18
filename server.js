@@ -34,10 +34,8 @@ function genererPaquet() {
         }
     }
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 1.5, rang: 1, couleur: 'Special', classe: 'Multi', type: 'Special', display: '1' });
-    // Les Phénix avec le symbole Aigle
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 11, rang: 11, couleur: 'Vert', classe: 'PhenixV', type: 'Special', display: '🦅' });
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 11.5, rang: 11, couleur: 'Jaune', classe: 'PhenixJ', type: 'Special', display: '🦅' });
-    // Le Dragon
     paquet.push({ id: `c_${idCounter++}`, valeurSort: 12, rang: 12, couleur: 'Rouge', classe: 'Dragon', type: 'Special', display: '🐉' });
     return paquet;
 }
@@ -83,13 +81,18 @@ function analyserCombinaison(cartesJouees) {
     }
 
     if (nb === 5) {
-        let contientSpecial = cartesJouees.some(c => c.type === 'Special');
-        if (contientSpecial) return null;
+        // CORRECTION DU BUG FULL : On interdit UNIQUEMENT Dragon et Phénix, pas le "1" Multi
+        let contientInterdit = cartesJouees.some(c => c.classe === 'Dragon' || c.classe === 'PhenixV' || c.classe === 'PhenixJ');
+        if (contientInterdit) return null;
 
         let cartesTriees = [...cartesJouees].sort((a,b) => a.rang - b.rang);
         let isSuite = true;
         for(let i = 1; i < 5; i++) { if (cartesTriees[i].rang !== cartesTriees[i-1].rang + 1) isSuite = false; }
-        let isCouleur = cartesJouees.every(c => c.couleur === cartesJouees[0].couleur);
+        
+        // CORRECTION COULEUR : Le "1" Multi prend la couleur des autres
+        let couleurBase = cartesJouees.find(c => c.couleur !== 'Special')?.couleur;
+        let isCouleur = couleurBase ? cartesJouees.every(c => c.couleur === couleurBase || c.couleur === 'Special') : false;
+
         let isFull = (cartesTriees[0].rang === cartesTriees[2].rang && cartesTriees[3].rang === cartesTriees[4].rang) ||
                      (cartesTriees[0].rang === cartesTriees[1].rang && cartesTriees[2].rang === cartesTriees[4].rang);
 
@@ -103,6 +106,7 @@ function analyserCombinaison(cartesJouees) {
         }
         if (isFull) {
             combo.nom = "Full";
+            // La puissance du full dépend toujours du brelan (carte index 2 après tri)
             combo.puissance = 200 + cartesTriees[2].rang;
             return combo;
         }
