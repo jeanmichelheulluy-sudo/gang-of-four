@@ -5,6 +5,7 @@ const io = require('socket.io')(http);
 
 app.use(express.static('public'));
 
+// --- ÉTAT DU JEU CENTRALISÉ ---
 let connexions = []; 
 let config = { nbHumains: 2 }; 
 let partieEnCours = false;
@@ -21,7 +22,7 @@ let maitreDuPli = 0;
 let dernierGagnant = null;
 let dernierPerdant = null;
 let phaseEchange = false;
-let messageTribut = ""; // Historique textuel du tribut visible par tous
+let messageTribut = ""; 
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
@@ -122,6 +123,55 @@ function analyserCombinaison(cartesJouees) {
     return null;
 }
 
+// --- FONCTIONS ALGORITHMIQUES DE RECHERCHE IA ---
+function obtenirCombinaisonsDe5(main) {
+    let resultats = [];
+    let cartesValides = main.filter(c => c.classe !== 'Dragon' && c.classe !== 'PhenixV' && c.classe !== 'PhenixJ');
+    let n = cartesValides.length;
+    if (n < 5) return resultats;
+
+    for (let i = 0; i < n - 4; i++) {
+        for (let j = i + 1; j < n - 3; j++) {
+            for (let k = j + 1; k < n - 2; k++) {
+                for (let l = k + 1; l < n - 1; l++) {
+                    for (let m = l + 1; m < n; m++) {
+                        resultats.push([cartesValides[i], cartesValides[j], cartesValides[k], cartesValides[l], cartesValides[m]]);
+                    }
+                }
+            }
+        }
+    }
+    return resultats;
+}
+
+function obtenirGangs(main) {
+    let groupes = {};
+    main.forEach(c => { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
+    let gangs = [];
+    Object.values(groupes).forEach(g => {
+        if (g.length >= 4) {
+            for (let s = 4; s <= g.length; s++) { gangs.push(g.slice(0, s)); }
+        }
+    });
+    return gangs;
+}
+
+function obtenirPaires(main) {
+    let groupes = {};
+    main.forEach(c => { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
+    let paires = [];
+    Object.values(groupes).forEach(g => { if (g.length >= 2) paires.push(g.slice(0, 2)); });
+    return paires;
+}
+
+function obtenirBrelans(main) {
+    let groupes = {};
+    main.forEach(c => { if(!groupes[c.rang]) groupes[c.rang] = []; groupes[c.rang].push(c); });
+    let brelans = [];
+    Object.values(groupes).forEach(g => { if (g.length >= 3) brelans.push(g.slice(0, 3)); });
+    return brelans;
+}
+
 function attribuerNomsIA() {
     let countIA = 1;
     for(let i=0; i<4; i++) { if(typesJoueurs[i] === 'ia') nomsJoueurs[i] = `IA ${countIA++}`; }
@@ -159,12 +209,11 @@ function demarrerNouvelleManche() {
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             let txtCarteRendue = (pireCarte.display || pireCarte.rang) + " " + pireCarte.couleur;
             
-            // CORRECTION VISUELLE : Enregistrement textuel de l'échange automatique
             messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu [${txtCarteRendue}].`;
             lancerPartie();
         } else {
             phaseEchange = true;
-            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. En attente du choix de l'humain...`;
+            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
         }
@@ -201,94 +250,98 @@ function verifierTourIA() {
     if (typesJoueurs[joueurActif] === 'ia') setTimeout(faireJouerIA, 1500);
 }
 
-// CORRECTION : LOGIQUE IA AVANCÉE POUR LES GANGS ET LES FULLS
 function faireJouerIA() {
     let mainIA = mains[joueurActif];
     let aJoue = false;
     let comboA_Jouer = [];
 
-    // 1. Regroupement par rang
-    let groupes = {};
-    mainIA.forEach(c => {
-        if(!groupes[c.rang]) groupes[c.rang] = [];
-        groupes[c.rang].push(c);
-    });
-
-    // 2. Identification des structures
-    let gangsDispo = [];
-    Object.values(groupes).forEach(g => { if (g.length >= 4) gangsDispo.push(g); });
-    let brelansDispo = Object.values(groupes).filter(g => g.length >= 3);
-    let pairesDispo = Object.values(groupes).filter(g => g.length >= 2);
-
-    // Construction de Fulls potentiels (Brelan + Paire)
-    let fullsDispo = [];
-    brelansDispo.forEach(b => {
-        pairesDispo.forEach(p => {
-            if (b[0].rang !== p[0].rang) {
-                fullsDispo.push([...b.slice(0,3), ...p.slice(0,2)]);
-            }
-        });
-    });
-
     if (etatTable === null) {
-        // L'IA ouvre le pli : Priorité aux Fulls, puis brelans, paires, ou sa plus petite carte
-        if (fullsDispo.length > 0) comboA_Jouer = fullsDispo[0];
-        else if (brelansDispo.length > 0) comboA_Jouer = brelansDispo[0].slice(0,3);
-        else if (pairesDispo.length > 0) comboA_Jouer = pairesDispo[0].slice(0,2);
-        else comboA_Jouer = [mainIA[0]]; 
+        // Ouverture IA : Priorité absolue aux Gangs, puis Combinaisons de 5 (Quintes, Fulls...), Brelans, Paires, et Carte seule
+        let gangs = obtenirGangs(mainIA);
+        let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
+        let brelans = obtenirBrelans(mainIA);
+        let paires = obtenirPaires(mainIA);
+
+        if (gangs.length > 0) {
+            comboA_Jouer = gangs[0];
+        } else if (combos5.length > 0) {
+            combos5.sort((a, b) => a.info.puissance - b.info.puissance);
+            comboA_Jouer = combos5[0].cartes;
+        } else if (brelans.length > 0) {
+            comboA_Jouer = brelans[0];
+        } else if (paires.length > 0) {
+            comboA_Jouer = paires[0];
+        } else {
+            comboA_Jouer = [mainIA[0]];
+        }
     } else {
         let fDemande = etatTable.format;
         let pDemande = etatTable.puissance;
+        let isGangDemande = etatTable.isGang;
 
-        if (fDemande === 1) {
-            for (let i = 0; i < mainIA.length; i++) {
-                if (getPuissanceCarte(mainIA[i].rang, mainIA[i].couleur, mainIA[i].classe) > pDemande) {
-                    comboA_Jouer = [mainIA[i]]; break;
+        if (!isGangDemande) {
+            if (fDemande === 1) {
+                for (let i = 0; i < mainIA.length; i++) {
+                    if (getPuissanceCarte(mainIA[i].rang, mainIA[i].couleur, mainIA[i].classe) > pDemande) {
+                        comboA_Jouer = [mainIA[i]]; break;
+                    }
                 }
+            } else if (fDemande === 2) {
+                let paires = obtenirPaires(mainIA).map(p => ({ cartes: p, info: analyserCombinaison(p) })).filter(p => p.info && p.info.puissance > pDemande);
+                if (paires.length > 0) { paires.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = paires[0].cartes; }
+            } else if (fDemande === 3) {
+                let brelans = obtenirBrelans(mainIA).map(b => ({ cartes: b, info: analyserCombinaison(b) })).filter(b => b.info && b.info.puissance > pDemande);
+                if (brelans.length > 0) { brelans.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = brelans[0].cartes; }
+            } else if (fDemande === 5) {
+                // L'IA cherche parmi toutes ses combinaisons de 5 cartes (y compris Suites et Quintes Flush)
+                let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(c => c.info && c.info.puissance > pDemande);
+                if (combos5.length > 0) { combos5.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = combos5[0].cartes; }
             }
-        } else if (fDemande === 2) {
-            for (let p of pairesDispo) {
-                let test = p.slice(0,2);
-                if (analyserCombinaison(test).puissance > pDemande) { comboA_Jouer = test; break; }
-            }
-        } else if (fDemande === 3) {
-            for (let b of brelansDispo) {
-                let test = b.slice(0,3);
-                if (analyserCombinaison(test).puissance > pDemande) { comboA_Jouer = test; break; }
-            }
-        } else if (fDemande === 5 && etatTable.nom === "Full") {
-            for (let f of fullsDispo) {
-                if (analyserCombinaison(f).puissance > pDemande) { comboA_Jouer = f; break; }
-            }
-        }
 
-        // COUPE PAR GANG : Si l'IA n'a pas pu répondre normalement mais possède un Gang
-        if (comboA_Jouer.length === 0 && gangsDispo.length > 0) {
-            for (let g of gangsDispo) {
-                let infoGang = analyserCombinaison(g);
-                if (!etatTable.isGang || infoGang.puissance > pDemande) {
-                    comboA_Jouer = g; 
-                    break;
-                }
+            // CONTRE PAR UN GANG (Coupe)
+            if (comboA_Jouer.length === 0) {
+                let gangs = obtenirGangs(mainIA).map(g => ({ cartes: g, info: analyserCombinaison(g) }));
+                if (gangs.length > 0) { gangs.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = gangs[0].cartes; }
             }
+        } else {
+            // Surenchère sur un Gang existant
+            let gangs = obtenirGangs(mainIA).map(g => ({ cartes: g, info: analyserCombinaison(g) })).filter(g => g.info && g.info.puissance > pDemande);
+            if (gangs.length > 0) { gangs.sort((a, b) => a.info.puissance - b.info.puissance); comboA_Jouer = gangs[0].cartes; }
         }
     }
 
+    // Exécution du pli si validé par les règles
     if (comboA_Jouer.length > 0) {
         let info = analyserCombinaison(comboA_Jouer);
         if (info) {
-            comboA_Jouer.forEach(c => {
-                let idx = mainIA.findIndex(m => m.id === c.id);
-                if (idx > -1) mainIA.splice(idx, 1);
-            });
-            etatTable = info; etatTable.cartes = comboA_Jouer; etatTable.nomProprio = nomsJoueurs[joueurActif];
-            nbPassesCons = 0; maitreDuPli = joueurActif; aJoue = true;
+            let coupValide = false;
+            if (etatTable === null) coupValide = true;
+            else if (info.isGang) { if (!etatTable.isGang || info.puissance > etatTable.puissance) coupValide = true; }
+            else { if (!etatTable.isGang && info.format === etatTable.format && info.puissance > etatTable.puissance) coupValide = true; }
+
+            if (coupValide) {
+                comboA_Jouer.forEach(c => {
+                    let idx = mainIA.findIndex(m => m.id === c.id);
+                    if (idx > -1) mainIA.splice(idx, 1);
+                });
+                etatTable = info;
+                etatTable.cartes = comboA_Jouer;
+                etatTable.nomProprio = nomsJoueurs[joueurActif];
+                nbPassesCons = 0;
+                maitreDuPli = joueurActif;
+                aJoue = true;
+            }
         }
     }
 
     if (!aJoue) nbPassesCons++;
 
-    if (mainIA.length === 0) { partieTerminee(joueurActif); return; }
+    // CRUCIAL : L'IA ne peut déclencher sa victoire que si elle a posé sa dernière carte légalement
+    if (aJoue && mainIA.length === 0) {
+        partieTerminee(joueurActif);
+        return;
+    }
+
     passerAuJoueurSuivant();
 }
 
@@ -300,6 +353,7 @@ function passerAuJoueurSuivant() {
 
 function partieTerminee(gagnant) {
     partieEnCours = false;
+    let gagnantGlobal = gagnant;
     dernierGagnant = gagnant;
     
     let maxCartes = -1; dernierPerdant = 0;
@@ -312,7 +366,7 @@ function partieTerminee(gagnant) {
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
 
-    io.emit('finManche', { gagnant: gagnant, nomGagnant: nomsJoueurs[gagnant], scoresGlobaux: scoresGlobaux });
+    io.emit('finManche', { gagnant: gagnantGlobal, nomGagnant: nomsJoueurs[gagnantGlobal], scoresGlobaux: scoresGlobaux });
 }
 
 io.on('connection', (socket) => {
