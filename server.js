@@ -175,6 +175,23 @@ function attribuerNomsIA() {
     for(let i=0; i<4; i++) { if(typesJoueurs[i] === 'ia') nomsJoueurs[i] = `IA ${countIA++}`; }
 }
 
+// NOUVELLE FONCTION : Formate le nom de la carte avec la couleur HTML pour le texte du Tribut
+function formaterNomCarte(carte) {
+    let nom = carte.rang;
+    if (carte.classe === 'Dragon') nom = 'Dragon';
+    else if (carte.classe === 'PhenixV') nom = 'Phénix';
+    else if (carte.classe === 'PhenixJ') nom = 'Phénix';
+    else if (carte.classe === 'Multi') nom = '1 Multi';
+    
+    let colorHex = '#ffffff';
+    if(carte.couleur === 'Vert') colorHex = '#2ecc71';
+    if(carte.couleur === 'Jaune') colorHex = '#f1c40f';
+    if(carte.couleur === 'Rouge') colorHex = '#e74c3c';
+    if(carte.couleur === 'Special') colorHex = '#8e44ad';
+
+    return `<span style="color: ${colorHex}; font-weight: bold; text-transform: uppercase;">[${nom}]</span>`;
+}
+
 function demarrerNouvelleManche() {
     let paquet = genererPaquet();
     for (let i = paquet.length - 1; i > 0; i--) {
@@ -199,19 +216,19 @@ function demarrerNouvelleManche() {
         mains[dernierGagnant].push(carteDonnee);
         mains[dernierGagnant] = trierCartes(mains[dernierGagnant]);
 
-        let txtCarteDonnee = (carteDonnee.display || carteDonnee.rang) + " " + carteDonnee.couleur;
+        let txtCarteDonnee = formaterNomCarte(carteDonnee);
 
         if (typesJoueurs[dernierGagnant] === 'ia') {
             let pireCarte = mains[dernierGagnant].splice(0, 1)[0];
             mains[dernierPerdant].push(pireCarte);
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
-            let txtCarteRendue = (pireCarte.display || pireCarte.rang) + " " + pireCarte.couleur;
             
-            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu [${txtCarteRendue}].`;
+            let txtCarteRendue = formaterNomCarte(pireCarte);
+            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu le ${txtCarteRendue}.`;
             lancerPartie();
         } else {
             phaseEchange = true;
-            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné [${txtCarteDonnee}] à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
+            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
         }
@@ -254,14 +271,12 @@ function faireJouerIA() {
     let comboA_Jouer = [];
 
     if (etatTable === null) {
-        // OUVERTURE STRATÉGIQUE (Se débarrasser des cartes faibles en priorité)
         let pireCarte = mainIA[0]; 
         let paires = obtenirPaires(mainIA);
         let brelans = obtenirBrelans(mainIA);
         let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
         combos5.sort((a, b) => a.info.puissance - b.info.puissance);
 
-        // L'IA joue 5 cartes uniquement si c'est une combinaison très faible (puissance < 8) ou si c'est la fin de sa main
         if (mainIA.length === 5 && combos5.length > 0) {
             comboA_Jouer = combos5[0].cartes;
         } else if (combos5.length > 0 && combos5[0].info.puissance < 8) {
@@ -275,7 +290,6 @@ function faireJouerIA() {
             else { comboA_Jouer = [pireCarte]; }
         }
     } else {
-        // RÉPONSE AU PLI
         let fDemande = etatTable.format;
         let pDemande = etatTable.puissance;
         let isGangDemande = etatTable.isGang;
@@ -333,7 +347,6 @@ function faireJouerIA() {
 
     if (!aJoue) nbPassesCons++;
 
-    // CORRECTION VISUELLE : Mettre à jour l'interface AVANT de vérifier la condition de victoire
     synchroniserToutLeMonde();
 
     if (aJoue && mainIA.length === 0) {
@@ -358,7 +371,6 @@ function partieTerminee(gagnant) {
     let gagnantGlobal = gagnant;
     dernierGagnant = gagnant;
     
-    // Forcer la synchronisation pour afficher 0 cartes dans la main du gagnant
     synchroniserToutLeMonde();
 
     let maxCartes = -1; dernierPerdant = 0;
@@ -416,8 +428,8 @@ io.on('connection', (socket) => {
             mains[dernierPerdant].push(carteDonnee);
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             
-            let txtCarteRendue = (carteDonnee.display || carteDonnee.rang) + " " + carteDonnee.couleur;
-            messageTribut += ` Le gagnant a rendu [${txtCarteRendue}].`;
+            let txtCarteRendue = formaterNomCarte(carteDonnee);
+            messageTribut += ` Le gagnant a rendu le ${txtCarteRendue}.`;
             lancerPartie();
         }
     });
