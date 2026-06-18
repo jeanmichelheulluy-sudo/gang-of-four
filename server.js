@@ -175,7 +175,6 @@ function attribuerNomsIA() {
     for(let i=0; i<4; i++) { if(typesJoueurs[i] === 'ia') nomsJoueurs[i] = `IA ${countIA++}`; }
 }
 
-// NOUVELLE FONCTION : Formate le nom de la carte avec la couleur HTML pour le texte du Tribut
 function formaterNomCarte(carte) {
     let nom = carte.rang;
     if (carte.classe === 'Dragon') nom = 'Dragon';
@@ -224,11 +223,11 @@ function demarrerNouvelleManche() {
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             
             let txtCarteRendue = formaterNomCarte(pireCarte);
-            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu le ${txtCarteRendue}.`;
+            messageTribut = `${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu le ${txtCarteRendue}.`;
             lancerPartie();
         } else {
             phaseEchange = true;
-            messageTribut = `Tribut : ${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
+            messageTribut = `${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
         }
