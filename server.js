@@ -22,7 +22,7 @@ let dernierGagnant = null;
 let dernierPerdant = null;
 let phaseEchange = false;
 let messageTribut = ""; 
-let txtTributPart1 = ""; // Mémorise la première partie de la transaction
+let txtTributPart1 = ""; 
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
@@ -177,17 +177,16 @@ function attribuerNomsIA() {
 }
 
 function formaterNomCarte(carte) {
+    if (carte.classe === 'Dragon') return `<span style="color: #e74c3c; font-weight: bold; text-transform: uppercase;">[Dragon]</span>`;
+    if (carte.classe === 'Multi') return `<span style="background: linear-gradient(to right, #e74c3c, #f1c40f, #2ecc71, #3498db); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold; text-transform: uppercase;">[1 Multi]</span>`;
+    
     let nom = carte.rang;
-    if (carte.classe === 'Dragon') nom = 'Dragon';
-    else if (carte.classe === 'PhenixV') nom = 'Phénix';
-    else if (carte.classe === 'PhenixJ') nom = 'Phénix';
-    else if (carte.classe === 'Multi') nom = '1 Multi';
+    if (carte.classe === 'PhenixV' || carte.classe === 'PhenixJ') nom = 'Phénix';
     
     let colorHex = '#ffffff';
     if(carte.couleur === 'Vert') colorHex = '#2ecc71';
     if(carte.couleur === 'Jaune') colorHex = '#f1c40f';
     if(carte.couleur === 'Rouge') colorHex = '#e74c3c';
-    if(carte.couleur === 'Special') colorHex = '#8e44ad';
 
     return `<span style="color: ${colorHex}; font-weight: bold; text-transform: uppercase;">[${nom}]</span>`;
 }
@@ -385,14 +384,39 @@ function partieTerminee(gagnant) {
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
 
-    io.emit('finManche', { 
-        gagnant: gagnantGlobal, 
-        nomGagnant: nomsJoueurs[gagnantGlobal], 
-        scoresGlobaux: scoresGlobaux,
-        penalites: penalites,
-        cartesRestantes: cartesRestantes,
-        nomsJoueurs: nomsJoueurs
-    });
+    // VÉRIFICATION DE FIN DE PARTIE (Score >= 100)
+    let finDePartie = scoresGlobaux.some(score => score >= 100);
+
+    if (finDePartie) {
+        // Le vainqueur est celui qui a le MOINS de points
+        let indexVainqueur = 0;
+        let minScore = scoresGlobaux[0];
+        for(let i=1; i<4; i++) {
+            if(scoresGlobaux[i] < minScore) {
+                minScore = scoresGlobaux[i];
+                indexVainqueur = i;
+            }
+        }
+        
+        io.emit('finPartie', { 
+            vainqueurJeu: nomsJoueurs[indexVainqueur],
+            gagnantManche: gagnantGlobal, 
+            nomGagnant: nomsJoueurs[gagnantGlobal], 
+            scoresGlobaux: scoresGlobaux,
+            penalites: penalites,
+            cartesRestantes: cartesRestantes,
+            nomsJoueurs: nomsJoueurs
+        });
+    } else {
+        io.emit('finManche', { 
+            gagnant: gagnantGlobal, 
+            nomGagnant: nomsJoueurs[gagnantGlobal], 
+            scoresGlobaux: scoresGlobaux,
+            penalites: penalites,
+            cartesRestantes: cartesRestantes,
+            nomsJoueurs: nomsJoueurs
+        });
+    }
 }
 
 io.on('connection', (socket) => {
@@ -476,6 +500,16 @@ io.on('connection', (socket) => {
     });
 
     socket.on('demandeNouvelleManche', () => { demarrerNouvelleManche(); });
+
+    // NOUEVELLE LOGIQUE : Recommencer à zéro après 100 points
+    socket.on('demandeReinitialisationPartie', () => {
+        scoresGlobaux = [0, 0, 0, 0];
+        dernierGagnant = null;
+        dernierPerdant = null;
+        messageTribut = "";
+        txtTributPart1 = "";
+        demarrerNouvelleManche();
+    });
 });
 
 http.listen(3000, () => { console.log('Serveur en ligne'); });
