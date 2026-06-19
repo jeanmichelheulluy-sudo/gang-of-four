@@ -137,7 +137,6 @@
         
         .Vert { color: #1e8449; } .Jaune { color: #d4ac0d; } .Rouge { color: #c0392b; }
         
-        /* CORRECTION: Multi en Multicolore sans violet de fond, et Dragon en Rouge net */
         .Multi { background: #fdfbf7 !important; border: 2px solid #9b59b6 !important; }
         .Multi .center, .Multi .corner { 
             background: linear-gradient(135deg, #e74c3c, #f1c40f, #2ecc71, #3498db); 
@@ -145,8 +144,9 @@
             -webkit-text-fill-color: transparent; 
         }
         
+        /* FILTRE POUR FORCER L'ÉMOJI DRAGON EN ROUGE PROFOND */
         .Dragon { background: #fdfbf7 !important; border: 2px solid #c0392b !important; }
-        .Dragon .center, .Dragon .corner { color: #e74c3c !important; filter: drop-shadow(1px 1px 2px rgba(192, 57, 43, 0.4)); }
+        .Dragon .center, .Dragon .corner { filter: drop-shadow(0px 0px 3px red) sepia(1) hue-rotate(-50deg) saturate(5); }
 
         .PhenixV { background: linear-gradient(135deg, #eafaf1, #d5f5e3) !important; border: 2px solid #27ae60 !important; color: #1e8449 !important; }
         .PhenixJ { background: linear-gradient(135deg, #fef9e7, #fcf3cf) !important; border: 2px solid #f1c40f !important; color: #d4ac0d !important; }
@@ -202,11 +202,12 @@
         <div id="zone-hote" style="display:none;">
             <h3 style="font-family: 'Cinzel', serif;">Chef de Table</h3>
             <label>Nombre de joueurs réels :</label><br><br>
+            <!-- REMPLACEMENT DU MOT HUMAIN PAR JOUEUR ICI -->
             <select id="select-joueurs">
-                <option value="1">1 Humain (Toi + 3 IA)</option>
-                <option value="2" selected>2 Humains (+ 2 IA)</option>
-                <option value="3">3 Humains (+ 1 IA)</option>
-                <option value="4">4 Humains (Zéro IA)</option>
+                <option value="1">1 Joueur (Toi + 3 IA)</option>
+                <option value="2" selected>2 Joueurs (+ 2 IA)</option>
+                <option value="3">3 Joueurs (+ 1 IA)</option>
+                <option value="4">4 Joueurs (Zéro IA)</option>
             </select><br><br>
             <button onclick="validerConfig()">Ouvrir la Table</button>
         </div>
@@ -426,7 +427,6 @@
 
         function envoyerPasser() { socket.emit('actionPasser'); }
 
-        // GESTIONNAIRE CENTRALISÉ POUR LA MODALE
         function afficherModalFin(data, isFinPartie) {
             document.getElementById('modal-fin-manche').style.display = 'flex';
             
@@ -472,12 +472,10 @@
             });
         }
 
-        // Écoute de fin de manche classique
         socket.on('finManche', (data) => {
             afficherModalFin(data, false);
         });
 
-        // Écoute de fin de partie complète
         socket.on('finPartie', (data) => {
             afficherModalFin(data, true);
         });
