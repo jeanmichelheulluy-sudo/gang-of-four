@@ -6,7 +6,6 @@
     <title>Gang of Four Multi</title>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
     <style>
-        /* Thème Premium : Ambiance feutrée Hong Kong 1920s (Days of Wonder) */
         body { 
             font-family: Arial, sans-serif; 
             background: radial-gradient(circle at center, #5c1104, #150300); 
@@ -38,7 +37,6 @@
         }
         .title-symbol { color: #d4ac0d; font-size: 0.7em; vertical-align: middle; margin: 0 15px; text-shadow: none; }
 
-        /* Layout global avec flexbox */
         .layout-principal { 
             display: none; 
             justify-content: center; 
@@ -117,7 +115,6 @@
         }
         .zone-cartes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 110px; }
         
-        /* Design Premium des Cartes */
         .carte { 
             width: 60px; 
             height: 95px; 
@@ -139,11 +136,20 @@
         .carte.selected { transform: translateY(-15px) scale(1.05); border: 2px solid #3498db; box-shadow: 0 10px 20px rgba(52, 152, 219, 0.5); }
         
         .Vert { color: #1e8449; } .Jaune { color: #d4ac0d; } .Rouge { color: #c0392b; }
-        .Multi { background: linear-gradient(135deg, #f9ebea, #fef9e7, #e8f8f5) !important; border: 2px solid #8e44ad !important; color:#8e44ad !important;}
+        
+        /* CORRECTION: Multi en Multicolore sans violet de fond, et Dragon en Rouge net */
+        .Multi { background: #fdfbf7 !important; border: 2px solid #9b59b6 !important; }
+        .Multi .center, .Multi .corner { 
+            background: linear-gradient(135deg, #e74c3c, #f1c40f, #2ecc71, #3498db); 
+            -webkit-background-clip: text; 
+            -webkit-text-fill-color: transparent; 
+        }
+        
+        .Dragon { background: #fdfbf7 !important; border: 2px solid #c0392b !important; }
+        .Dragon .center, .Dragon .corner { color: #e74c3c !important; filter: drop-shadow(1px 1px 2px rgba(192, 57, 43, 0.4)); }
+
         .PhenixV { background: linear-gradient(135deg, #eafaf1, #d5f5e3) !important; border: 2px solid #27ae60 !important; color: #1e8449 !important; }
         .PhenixJ { background: linear-gradient(135deg, #fef9e7, #fcf3cf) !important; border: 2px solid #f1c40f !important; color: #d4ac0d !important; }
-        .Dragon { background: linear-gradient(135deg, #fdedec, #fadbd8) !important; border: 2px solid #c0392b !important; }
-        .Dragon .center, .Dragon .corner { filter: drop-shadow(0px 0px 4px rgba(192, 57, 43, 0.8)); color: #c0392b; }
 
         .corner { font-size: 0.8em; padding: 3px; position: absolute; } 
         .top-left { top: 0; left: 0; } 
@@ -169,7 +175,6 @@
         
         input[type="text"], select { padding: 10px; font-size: 1.1em; border-radius: 6px; border: 1px solid #bda87f; text-align: center; margin-bottom: 15px; width: 80%; background:#fdfbf7; color:#2c3e50; font-family: Arial, sans-serif;}
         
-        /* Bandeau Tribut centré dans la table */
         .box-tribut { 
             background: linear-gradient(to right, rgba(0,0,0,0), rgba(241, 196, 15, 0.2), rgba(0,0,0,0)); 
             border-top: 1px solid rgba(241, 196, 15, 0.5);
@@ -212,9 +217,10 @@
         </div>
     </div>
 
+    <!-- MODAL DE FIN DE MANCHE / PARTIE -->
     <div id="modal-fin-manche" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; justify-content:center; align-items:center;">
         <div style="background: radial-gradient(circle at top, #8a1c0b, #4a0f05); border:4px solid #f1c40f; border-radius:15px; padding:25px; width:90%; max-width:550px; text-align:center; box-shadow: 0 0 50px rgba(241, 196, 15, 0.3);">
-            <h2 style="font-family: 'Cinzel', serif; font-size: 2.2em; color:#f1c40f; margin-top:0; text-shadow: 2px 2px 4px black;">Manche Terminée !</h2>
+            <h2 id="titre-modal" style="font-family: 'Cinzel', serif; font-size: 2.2em; color:#f1c40f; margin-top:0; text-shadow: 2px 2px 4px black;">Manche Terminée !</h2>
             <h3 id="modal-gagnant" style="font-family: 'Cinzel', serif; color:white; margin-bottom: 20px; font-size: 1.5em;">Gagnant : ...</h3>
             <table style="width:100%; color:white; border-collapse:collapse; margin:25px 0; font-size: 1.1em;">
                 <thead>
@@ -228,7 +234,7 @@
                 <tbody id="modal-table-body">
                 </tbody>
             </table>
-            <button onclick="demanderSuivantModal()">Lancer la Manche Suivante</button>
+            <button id="btn-modal-suivant" onclick="demanderSuivantModal()">Lancer la Manche Suivante</button>
         </div>
     </div>
 
@@ -262,7 +268,8 @@
         </div>
 
         <div id="score-bar" class="score-panel">
-            </div>
+            <!-- Rempli dynamiquement -->
+        </div>
 
     </div>
 
@@ -325,7 +332,6 @@
                 divTribut.style.display = 'none';
             }
 
-            // --- NOUVEAU LOGIQUE : TRI CROISSANT DES SCORES (LATÉRAL) ---
             let tabScores = [];
             for(let i=0; i<4; i++) {
                 tabScores.push({ nom: data.nomsJoueurs[i], score: data.scoresGlobaux[i], isMe: (i === monIndexJoueur) });
@@ -340,7 +346,6 @@
                 let fw = s.isMe ? 'bold' : 'normal';
                 divScores.innerHTML += `<div style="color: ${colorNom}; font-weight: ${fw};"><span style="color:#bda87f; font-family:'Cinzel', serif;">${idx + 1}.</span> ${s.nom} <span style="float:right; font-family:Arial, sans-serif;">${s.score} pts</span></div>`;
             });
-            // -------------------------------------------------------------
 
             let mapping = [
                 { id: 'box-ia1', idx: (monIndexJoueur + 1) % 4 },
@@ -421,11 +426,24 @@
 
         function envoyerPasser() { socket.emit('actionPasser'); }
 
-        socket.on('finManche', (data) => {
+        // GESTIONNAIRE CENTRALISÉ POUR LA MODALE
+        function afficherModalFin(data, isFinPartie) {
             document.getElementById('modal-fin-manche').style.display = 'flex';
-            document.getElementById('modal-gagnant').innerText = `👑 Gagnant : ${data.nomGagnant}`;
+            
+            if (isFinPartie) {
+                document.getElementById('titre-modal').innerText = "🏆 FIN DE LA PARTIE ! 🏆";
+                document.getElementById('modal-gagnant').innerHTML = `Vainqueur final : <span style="color:#2ecc71;">${data.vainqueurJeu}</span> !`;
+                let btn = document.getElementById('btn-modal-suivant');
+                btn.innerText = "Rejouer une nouvelle partie";
+                btn.onclick = demanderReinitialisationModal;
+            } else {
+                document.getElementById('titre-modal').innerText = "Manche Terminée !";
+                document.getElementById('modal-gagnant').innerText = `👑 Gagnant : ${data.nomGagnant}`;
+                let btn = document.getElementById('btn-modal-suivant');
+                btn.innerText = "Lancer la Manche Suivante";
+                btn.onclick = demanderSuivantModal;
+            }
 
-            // --- NOUVEAU LOGIQUE : TRI CROISSANT DANS LA MODALE DE FIN ---
             let tabFin = [];
             for(let i=0; i<4; i++) {
                 tabFin.push({
@@ -440,7 +458,6 @@
 
             let tbody = document.getElementById('modal-table-body');
             tbody.innerHTML = "";
-            
             tabFin.forEach((s) => {
                 let bg = s.isMe ? 'rgba(241, 196, 15, 0.1)' : 'transparent';
                 let txtNom = s.isMe ? `<span style="color:#f1c40f; font-weight:bold;">${s.nom} (Toi)</span>` : s.nom;
@@ -453,11 +470,26 @@
                     </tr>
                 `;
             });
+        }
+
+        // Écoute de fin de manche classique
+        socket.on('finManche', (data) => {
+            afficherModalFin(data, false);
+        });
+
+        // Écoute de fin de partie complète
+        socket.on('finPartie', (data) => {
+            afficherModalFin(data, true);
         });
 
         function demanderSuivantModal() {
             document.getElementById('modal-fin-manche').style.display = 'none';
             socket.emit('demandeNouvelleManche');
+        }
+
+        function demanderReinitialisationModal() {
+            document.getElementById('modal-fin-manche').style.display = 'none';
+            socket.emit('demandeReinitialisationPartie');
         }
 
         socket.on('erreur', (msg) => { alert(msg); });
