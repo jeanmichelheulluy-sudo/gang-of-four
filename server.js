@@ -22,6 +22,7 @@ let dernierGagnant = null;
 let dernierPerdant = null;
 let phaseEchange = false;
 let messageTribut = ""; 
+let txtTributPart1 = ""; // Mémorise la première partie de la transaction
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 
@@ -216,6 +217,7 @@ function demarrerNouvelleManche() {
         mains[dernierGagnant] = trierCartes(mains[dernierGagnant]);
 
         let txtCarteDonnee = formaterNomCarte(carteDonnee);
+        txtTributPart1 = `${nomsJoueurs[dernierPerdant]} a donné ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}`;
 
         if (typesJoueurs[dernierGagnant] === 'ia') {
             let pireCarte = mains[dernierGagnant].splice(0, 1)[0];
@@ -223,11 +225,11 @@ function demarrerNouvelleManche() {
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             
             let txtCarteRendue = formaterNomCarte(pireCarte);
-            messageTribut = `${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. L'IA lui a rendu le ${txtCarteRendue}.`;
+            messageTribut = `${txtTributPart1}.<br>En retour, ${nomsJoueurs[dernierGagnant]} a donné ${txtCarteRendue} à ${nomsJoueurs[dernierPerdant]}`;
             lancerPartie();
         } else {
             phaseEchange = true;
-            messageTribut = `${nomsJoueurs[dernierPerdant]} a donné le ${txtCarteDonnee} à ${nomsJoueurs[dernierGagnant]}. En attente de votre retour de carte...`;
+            messageTribut = `${txtTributPart1}. En attente du retour de carte`;
             synchroniserToutLeMonde();
             io.to(connexions[dernierGagnant]).emit('demandeEchange', carteDonnee);
         }
@@ -428,7 +430,7 @@ io.on('connection', (socket) => {
             mains[dernierPerdant] = trierCartes(mains[dernierPerdant]);
             
             let txtCarteRendue = formaterNomCarte(carteDonnee);
-            messageTribut += ` Le gagnant a rendu le ${txtCarteRendue}.`;
+            messageTribut = `${txtTributPart1}.<br>En retour, ${nomsJoueurs[dernierGagnant]} a donné ${txtCarteRendue} à ${nomsJoueurs[dernierPerdant]}`;
             lancerPartie();
         }
     });
