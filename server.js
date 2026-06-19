@@ -25,6 +25,7 @@ let messageTribut = "";
 let txtTributPart1 = ""; 
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
+const prénomsIA = ["Arthur", "Léo", "Gabriel", "Louis", "Jules", "Hugo", "Alice", "Emma", "Louise", "Lina", "Chloé", "Léa", "Victor", "Paul", "Inès", "Mila", "Anna", "Lucas", "Tom", "Sarah"];
 
 function genererPaquet() {
     let paquet = [];
@@ -172,8 +173,13 @@ function obtenirBrelans(main) {
 }
 
 function attribuerNomsIA() {
-    let countIA = 1;
-    for(let i=0; i<4; i++) { if(typesJoueurs[i] === 'ia') nomsJoueurs[i] = `IA ${countIA++}`; }
+    let prenomsMelanges = [...prénomsIA].sort(() => 0.5 - Math.random());
+    let countIA = 0;
+    for(let i=0; i<4; i++) { 
+        if(typesJoueurs[i] === 'ia') {
+            nomsJoueurs[i] = prenomsMelanges[countIA++]; 
+        } 
+    }
 }
 
 function formaterNomCarte(carte) {
@@ -384,11 +390,9 @@ function partieTerminee(gagnant) {
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
 
-    // VÉRIFICATION DE FIN DE PARTIE (Score >= 100)
     let finDePartie = scoresGlobaux.some(score => score >= 100);
 
     if (finDePartie) {
-        // Le vainqueur est celui qui a le MOINS de points
         let indexVainqueur = 0;
         let minScore = scoresGlobaux[0];
         for(let i=1; i<4; i++) {
@@ -501,7 +505,6 @@ io.on('connection', (socket) => {
 
     socket.on('demandeNouvelleManche', () => { demarrerNouvelleManche(); });
 
-    // NOUEVELLE LOGIQUE : Recommencer à zéro après 100 points
     socket.on('demandeReinitialisationPartie', () => {
         scoresGlobaux = [0, 0, 0, 0];
         dernierGagnant = null;
@@ -509,6 +512,25 @@ io.on('connection', (socket) => {
         messageTribut = "";
         txtTributPart1 = "";
         demarrerNouvelleManche();
+    });
+
+    // GESTION DU REFRESH (F5) / DÉCONNEXION
+    socket.on('disconnect', () => {
+        let index = connexions.indexOf(socket.id);
+        if (index > -1) {
+            connexions.splice(index, 1);
+        }
+        
+        // Si plus personne n'est sur la page, on reset entièrement la table
+        if (connexions.length === 0) {
+            partieEnCours = false;
+            etatTable = null;
+            dernierGagnant = null;
+            dernierPerdant = null;
+            phaseEchange = false;
+            scoresGlobaux = [0, 0, 0, 0];
+            config = { nbHumains: 2 }; 
+        }
     });
 });
 
