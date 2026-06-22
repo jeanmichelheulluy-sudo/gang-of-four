@@ -24,6 +24,8 @@ let phaseEchange = false;
 let messageTribut = ""; 
 let txtTributPart1 = ""; 
 
+let premierPliDePartie = true; // NOUVEAU : Contrôle le 1er tour de la partie globale
+
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 const prénomsIA = ["Arthur", "Léo", "Gabriel", "Louis", "Jules", "Hugo", "Alice", "Emma", "Louise", "Lina", "Chloé", "Léa", "Victor", "Paul", "Inès", "Mila", "Anna", "Lucas", "Tom", "Sarah"];
 
@@ -246,7 +248,19 @@ function demarrerNouvelleManche() {
 
 function lancerPartie() {
     phaseEchange = false;
-    joueurActif = dernierGagnant !== null ? dernierGagnant : 0;
+    
+    // NOUVELLE LOGIQUE : Le joueur ayant le 1 Multi commence la toute première manche
+    if (premierPliDePartie) {
+        for (let i = 0; i < 4; i++) {
+            if (mains[i].some(c => c.classe === 'Multi')) {
+                joueurActif = i;
+                break;
+            }
+        }
+    } else {
+        joueurActif = dernierGagnant !== null ? dernierGagnant : 0;
+    }
+
     partieEnCours = true;
     synchroniserToutLeMonde();
     verifierTourIA();
@@ -260,7 +274,8 @@ function synchroniserToutLeMonde() {
                 etatTable: etatTable, taillesMains: mains.map(m => m.length),
                 scoresGlobaux: scoresGlobaux, nomsJoueurs: nomsJoueurs,
                 phaseEchange: phaseEchange, dernierGagnant: dernierGagnant,
-                messageTribut: messageTribut
+                messageTribut: messageTribut,
+                premierPli: (premierPliDePartie && etatTable === null) // Indique à l'interface s'il faut forcer le Multi
             });
         }
     }
@@ -277,23 +292,44 @@ function faireJouerIA() {
     let comboA_Jouer = [];
 
     if (etatTable === null) {
-        let pireCarte = mainIA[0]; 
-        let paires = obtenirPaires(mainIA);
-        let brelans = obtenirBrelans(mainIA);
-        let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
-        combos5.sort((a, b) => a.info.puissance - b.info.puissance);
+        // NOUVELLE LOGIQUE : L'IA est obligée de jouer le 1 Multi si c'est le tout premier pli de la partie
+        if (premierPliDePartie) {
+            let multiCarte = mainIA.find(c => c.classe === 'Multi');
+            let paires = obtenirPaires(mainIA).filter(p => p.some(c => c.classe === 'Multi'));
+            let brelans = obtenirBrelans(mainIA).filter(b => b.some(c => c.classe === 'Multi'));
+            let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null && x.cartes.some(c => c.classe === 'Multi'));
+            
+            combos5.sort((a, b) => a.info.puissance - b.info.puissance);
 
-        if (mainIA.length === 5 && combos5.length > 0) {
-            comboA_Jouer = combos5[0].cartes;
-        } else if (combos5.length > 0 && combos5[0].info.puissance < 8) {
-            comboA_Jouer = combos5[0].cartes;
+            if (combos5.length > 0) {
+                comboA_Jouer = combos5[0].cartes;
+            } else if (brelans.length > 0) {
+                comboA_Jouer = brelans[0];
+            } else if (paires.length > 0) {
+                comboA_Jouer = paires[0];
+            } else {
+                comboA_Jouer = [multiCarte];
+            }
         } else {
-            let brelanPire = brelans.find(b => b.some(c => c.id === pireCarte.id));
-            let pairePire = paires.find(p => p.some(c => c.id === pireCarte.id));
+            // Logique d'ouverture normale
+            let pireCarte = mainIA[0]; 
+            let paires = obtenirPaires(mainIA);
+            let brelans = obtenirBrelans(mainIA);
+            let combos5 = obtenirCombinaisonsDe5(mainIA).map(c => ({ cartes: c, info: analyserCombinaison(c) })).filter(x => x.info !== null);
+            combos5.sort((a, b) => a.info.puissance - b.info.puissance);
 
-            if (brelanPire) { comboA_Jouer = brelanPire; }
-            else if (pairePire) { comboA_Jouer = pairePire; }
-            else { comboA_Jouer = [pireCarte]; }
+            if (mainIA.length === 5 && combos5.length > 0) {
+                comboA_Jouer = combos5[0].cartes;
+            } else if (combos5.length > 0 && combos5[0].info.puissance < 8) {
+                comboA_Jouer = combos5[0].cartes;
+            } else {
+                let brelanPire = brelans.find(b => b.some(c => c.id === pireCarte.id));
+                let pairePire = paires.find(p => p.some(c => c.id === pireCarte.id));
+
+                if (brelanPire) { comboA_Jouer = brelanPire; }
+                else if (pairePire) { comboA_Jouer = pairePire; }
+                else { comboA_Jouer = [pireCarte]; }
+            }
         }
     } else {
         let fDemande = etatTable.format;
@@ -347,6 +383,9 @@ function faireJouerIA() {
                 nbPassesCons = 0;
                 maitreDuPli = joueurActif;
                 aJoue = true;
+                
+                // Dès que le premier pli de la partie est posé, on enlève la contrainte du Multi
+                if (premierPliDePartie) premierPliDePartie = false;
             }
         }
     }
@@ -468,6 +507,15 @@ io.on('connection', (socket) => {
         let monIndex = connexions.indexOf(socket.id);
         if (monIndex !== joueurActif) return;
 
+        // VÉRIFICATION DE LA RÈGLE DU 1 MULTI POUR LE JOUEUR HUMAIN
+        if (premierPliDePartie && etatTable === null) {
+            let contientMulti = cartesSelectionnees.some(c => c.classe === 'Multi');
+            if (!contientMulti) {
+                socket.emit('erreur', 'Tu dois obligatoirement inclure le 1 Multicolore dans ce premier pli !');
+                return;
+            }
+        }
+
         let info = analyserCombinaison(cartesSelectionnees);
         if (!info) { socket.emit('erreur', 'Combinaison invalide !'); return; }
 
@@ -487,6 +535,8 @@ io.on('connection', (socket) => {
 
         etatTable = info; etatTable.cartes = cartesSelectionnees; etatTable.nomProprio = nomsJoueurs[monIndex];
         nbPassesCons = 0; maitreDuPli = monIndex;
+        
+        if (premierPliDePartie) premierPliDePartie = false;
         
         synchroniserToutLeMonde();
 
@@ -511,17 +561,16 @@ io.on('connection', (socket) => {
         dernierPerdant = null;
         messageTribut = "";
         txtTributPart1 = "";
+        premierPliDePartie = true; // On réinitialise la contrainte du Multi
         demarrerNouvelleManche();
     });
 
-    // GESTION DU REFRESH (F5) / DÉCONNEXION
     socket.on('disconnect', () => {
         let index = connexions.indexOf(socket.id);
         if (index > -1) {
             connexions.splice(index, 1);
         }
         
-        // Si plus personne n'est sur la page, on reset entièrement la table
         if (connexions.length === 0) {
             partieEnCours = false;
             etatTable = null;
@@ -530,6 +579,7 @@ io.on('connection', (socket) => {
             phaseEchange = false;
             scoresGlobaux = [0, 0, 0, 0];
             config = { nbHumains: 2 }; 
+            premierPliDePartie = true; // On réinitialise la contrainte du Multi
         }
     });
 });
