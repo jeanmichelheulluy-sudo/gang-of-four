@@ -15,6 +15,7 @@
             padding: 20px 10px; 
             user-select: none; 
             min-height: 100vh;
+            overflow-x: hidden; /* Empêche la barre de défilement horizontale avec les particules */
         }
         
         .box-menu { 
@@ -187,21 +188,22 @@
             text-shadow: 1px 1px 2px black;
         }
 
-        /* ANIMATION DU PARRAIN (FIN DE PARTIE) */
-        @keyframes stamp {
-            0% { transform: scale(5); opacity: 0; }
-            50% { transform: scale(0.8); opacity: 1; }
-            70% { transform: scale(1.1); }
-            100% { transform: scale(1); opacity: 1; }
+        /* --- NOUVELLES ANIMATIONS DU SCEAU ET DES PARTICULES --- */
+        @keyframes stampImpact {
+            0% { transform: scale(5) rotate(-20deg); opacity: 0; filter: brightness(2); }
+            20% { transform: scale(0.8) rotate(5deg); opacity: 1; filter: brightness(1.5) drop-shadow(0 0 30px #e74c3c); } /* Frappe violente */
+            35% { transform: scale(1.1) rotate(-3deg); filter: brightness(1) drop-shadow(0 15px 25px rgba(0,0,0,0.8)); } /* Rebond */
+            50% { transform: scale(0.95) rotate(1deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.8)); }
         }
 
-        .victoire-parrain {
-            font-family: 'Cinzel', serif;
-            font-size: 3.5em;
-            color: #f1c40f;
-            text-shadow: 0 0 20px rgba(241, 196, 15, 0.8), 2px 2px 5px black;
-            animation: stamp 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-            margin: 10px 0;
+        .sceau-image {
+            width: 140px; 
+            height: auto;
+            border-radius: 50%;
+            mix-blend-mode: multiply; /* Fait disparaître le fond blanc de l'image sur le fond rouge */
+            animation: stampImpact 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            margin-bottom: 10px;
         }
 
         .titre-grade {
@@ -212,6 +214,23 @@
             font-family: Arial, sans-serif;
             text-transform: uppercase;
             letter-spacing: 2px;
+        }
+
+        /* Classes pour générer les particules en JS */
+        .particle {
+            position: absolute;
+            background-color: #f1c40f;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 999;
+            box-shadow: 0 0 8px #f1c40f, 0 0 15px #f39c12;
+            animation: fall linear forwards;
+        }
+
+        @keyframes fall {
+            0% { transform: translateY(-5vh) scale(1); opacity: 1; }
+            100% { transform: translateY(105vh) scale(0); opacity: 0; }
         }
     </style>
 </head>
@@ -245,7 +264,7 @@
 
     <!-- MODAL DE FIN DE MANCHE / PARTIE -->
     <div id="modal-fin-manche" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; justify-content:center; align-items:center;">
-        <div style="background: radial-gradient(circle at top, #8a1c0b, #4a0f05); border:4px solid #f1c40f; border-radius:15px; padding:25px; width:90%; max-width:550px; text-align:center; box-shadow: 0 0 50px rgba(241, 196, 15, 0.3);">
+        <div id="contenu-modal" style="position: relative; background: radial-gradient(circle at top, #8a1c0b, #4a0f05); border:4px solid #f1c40f; border-radius:15px; padding:25px; width:90%; max-width:550px; text-align:center; box-shadow: 0 0 50px rgba(241, 196, 15, 0.3); z-index: 1001;">
             <h2 id="titre-modal" style="font-family: 'Cinzel', serif; font-size: 2.2em; color:#f1c40f; margin-top:0; text-shadow: 2px 2px 4px black;">Manche Terminée !</h2>
             <div id="modal-gagnant" style="font-family: 'Cinzel', serif; color:white; margin-bottom: 20px; font-size: 1.5em;">Gagnant : ...</div>
             <table style="width:100%; color:white; border-collapse:collapse; margin:25px 0; font-size: 1.1em;">
@@ -456,7 +475,25 @@
 
         function envoyerPasser() { socket.emit('actionPasser'); }
 
-        // --- GESTION COMPLÈTE DE LA MODALE ---
+        // --- FONCTION POUR GÉNÉRER LA PLUIE DE PARTICULES D'OR ---
+        function lancerPluieDor() {
+            const fondEcran = document.getElementById('modal-fin-manche');
+            // Nettoyage des anciennes particules s'il y en a
+            document.querySelectorAll('.particle').forEach(e => e.remove());
+
+            for (let i = 0; i < 60; i++) {
+                let p = document.createElement('div');
+                p.className = 'particle';
+                let size = Math.random() * 5 + 3; // Taille entre 3 et 8px
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = Math.random() * 100 + 'vw';
+                p.style.animationDuration = (Math.random() * 2 + 1.5) + 's'; // Vitesse de chute
+                p.style.animationDelay = (Math.random() * 1.5) + 's'; // Décalage pour un flux continu
+                fondEcran.appendChild(p);
+            }
+        }
+
         function afficherModalFin(data, isFinPartie) {
             document.getElementById('modal-fin-manche').style.display = 'flex';
             
@@ -479,9 +516,13 @@
                 document.getElementById('titre-modal').innerHTML = "❂ FIN DE LA GUERRE DES GANGS ❂";
                 document.getElementById('titre-modal').style.color = "#e74c3c";
                 
+                // Intégration de l'image cachet-de-cire-dragon.jpeg avec l'animation stampImpact
                 document.getElementById('modal-gagnant').innerHTML = `
-                    <div class="victoire-parrain">🐉 ${tabFin[0].nom} 🐉</div>
-                    <div style="color:white; font-size: 0.8em; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 30px;">Est le nouveau Parrain</div>
+                    <div style="margin: 15px 0;">
+                        <img src="cachet-de-cire-dragon.jpeg" alt="Sceau du Dragon" class="sceau-image">
+                    </div>
+                    <div style="font-family: 'Cinzel', serif; font-size: 2.2em; color: #f1c40f; text-shadow: 2px 2px 5px black; margin-bottom: 5px;">${tabFin[0].nom}</div>
+                    <div style="color:#bda87f; font-size: 0.9em; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 30px;">Est le nouveau Parrain</div>
                 `;
                 
                 let btn = document.getElementById('btn-modal-suivant');
@@ -489,6 +530,9 @@
                 btn.style.background = "linear-gradient(to bottom, #c0392b, #8a1c0b)";
                 btn.style.borderColor = "#e74c3c";
                 btn.onclick = demanderReinitialisationModal;
+
+                // Lancement de l'effet de pluie dorée
+                lancerPluieDor();
 
                 const grades = ["LE PARRAIN", "LE BRAS DROIT", "L'HOMME DE MAIN", "LE PION"];
                 
@@ -511,6 +555,9 @@
                 });
 
             } else {
+                // Nettoyer les particules éventuelles de la partie précédente
+                document.querySelectorAll('.particle').forEach(e => e.remove());
+                
                 document.getElementById('titre-modal').innerText = "Manche Terminée !";
                 document.getElementById('titre-modal').style.color = "#f1c40f";
                 document.getElementById('modal-gagnant').innerHTML = `👑 Gagnant du pli : <span style="color:#f1c40f;">${data.nomGagnant}</span>`;
@@ -536,7 +583,6 @@
             }
         }
 
-        // --- LES ÉCOUTEURS VITAUX (Ne pas effacer !) ---
         socket.on('finManche', (data) => {
             afficherModalFin(data, false);
         });
