@@ -24,7 +24,7 @@ let phaseEchange = false;
 let messageTribut = ""; 
 let txtTributPart1 = ""; 
 
-let premierPliDePartie = true; // NOUVEAU : Contrôle le 1er tour de la partie globale
+let premierPliDePartie = true; 
 
 const couleurs = ['Vert', 'Jaune', 'Rouge'];
 const prénomsIA = ["Arthur", "Léo", "Gabriel", "Louis", "Jules", "Hugo", "Alice", "Emma", "Louise", "Lina", "Chloé", "Léa", "Victor", "Paul", "Inès", "Mila", "Anna", "Lucas", "Tom", "Sarah"];
@@ -249,7 +249,6 @@ function demarrerNouvelleManche() {
 function lancerPartie() {
     phaseEchange = false;
     
-    // NOUVELLE LOGIQUE : Le joueur ayant le 1 Multi commence la toute première manche
     if (premierPliDePartie) {
         for (let i = 0; i < 4; i++) {
             if (mains[i].some(c => c.classe === 'Multi')) {
@@ -275,7 +274,7 @@ function synchroniserToutLeMonde() {
                 scoresGlobaux: scoresGlobaux, nomsJoueurs: nomsJoueurs,
                 phaseEchange: phaseEchange, dernierGagnant: dernierGagnant,
                 messageTribut: messageTribut,
-                premierPli: (premierPliDePartie && etatTable === null) // Indique à l'interface s'il faut forcer le Multi
+                premierPli: (premierPliDePartie && etatTable === null)
             });
         }
     }
@@ -292,7 +291,6 @@ function faireJouerIA() {
     let comboA_Jouer = [];
 
     if (etatTable === null) {
-        // NOUVELLE LOGIQUE : L'IA est obligée de jouer le 1 Multi si c'est le tout premier pli de la partie
         if (premierPliDePartie) {
             let multiCarte = mainIA.find(c => c.classe === 'Multi');
             let paires = obtenirPaires(mainIA).filter(p => p.some(c => c.classe === 'Multi'));
@@ -311,7 +309,6 @@ function faireJouerIA() {
                 comboA_Jouer = [multiCarte];
             }
         } else {
-            // Logique d'ouverture normale
             let pireCarte = mainIA[0]; 
             let paires = obtenirPaires(mainIA);
             let brelans = obtenirBrelans(mainIA);
@@ -384,7 +381,6 @@ function faireJouerIA() {
                 maitreDuPli = joueurActif;
                 aJoue = true;
                 
-                // Dès que le premier pli de la partie est posé, on enlève la contrainte du Multi
                 if (premierPliDePartie) premierPliDePartie = false;
             }
         }
@@ -415,9 +411,8 @@ function partieTerminee(gagnant) {
     partieEnCours = false;
     let gagnantGlobal = gagnant;
     dernierGagnant = gagnant;
-    
-    synchroniserToutLeMonde();
 
+    // Calcul immédiat des scores et pénalités
     let maxCartes = -1; dernierPerdant = 0;
     let cartesRestantes = mains.map(m => m.length);
     mains.forEach((m, i) => { if(m.length > maxCartes) { maxCartes = m.length; dernierPerdant = i; } });
@@ -428,6 +423,9 @@ function partieTerminee(gagnant) {
     });
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
+
+    // On envoie d'abord la table mise à jour (avec les scores recalculés qui s'affichent instantanément à droite)
+    synchroniserToutLeMonde();
 
     let finDePartie = scoresGlobaux.some(score => score >= 100);
 
@@ -507,7 +505,6 @@ io.on('connection', (socket) => {
         let monIndex = connexions.indexOf(socket.id);
         if (monIndex !== joueurActif) return;
 
-        // VÉRIFICATION DE LA RÈGLE DU 1 MULTI POUR LE JOUEUR HUMAIN
         if (premierPliDePartie && etatTable === null) {
             let contientMulti = cartesSelectionnees.some(c => c.classe === 'Multi');
             if (!contientMulti) {
@@ -561,7 +558,7 @@ io.on('connection', (socket) => {
         dernierPerdant = null;
         messageTribut = "";
         txtTributPart1 = "";
-        premierPliDePartie = true; // On réinitialise la contrainte du Multi
+        premierPliDePartie = true; 
         demarrerNouvelleManche();
     });
 
@@ -579,7 +576,7 @@ io.on('connection', (socket) => {
             phaseEchange = false;
             scoresGlobaux = [0, 0, 0, 0];
             config = { nbHumains: 2 }; 
-            premierPliDePartie = true; // On réinitialise la contrainte du Multi
+            premierPliDePartie = true; 
         }
     });
 });
