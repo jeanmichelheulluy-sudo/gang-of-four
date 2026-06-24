@@ -186,6 +186,32 @@
             display: none; 
             text-shadow: 1px 1px 2px black;
         }
+        /* Animation du sceau du Parrain */
+@keyframes stamp {
+    0% { transform: scale(5); opacity: 0; }
+    50% { transform: scale(0.8); opacity: 1; }
+    70% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.victoire-parrain {
+    font-family: 'Cinzel', serif;
+    font-size: 3.5em;
+    color: #f1c40f;
+    text-shadow: 0 0 20px rgba(241, 196, 15, 0.8), 2px 2px 5px black;
+    animation: stamp 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    margin: 10px 0;
+}
+
+.titre-grade {
+    font-size: 0.8em;
+    color: #bda87f;
+    display: block;
+    margin-bottom: 5px;
+    font-family: Arial, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
     </style>
 </head>
 <body>
