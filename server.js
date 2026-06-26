@@ -76,11 +76,15 @@ function analyserCombinaison(cartesJouees) {
 
     if (estIdentique && nb < 4) {
         combo.format = nb;
-        let cartePlusForte = cartesJouees[0];
-        cartesJouees.forEach(c => {
-            if(getPuissanceCarte(c.rang, c.couleur, c.classe) > getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur, cartePlusForte.classe)) cartePlusForte = c;
-        });
-        combo.puissance = getPuissanceCarte(cartePlusForte.rang, cartePlusForte.couleur, cartePlusForte.classe);
+        // ALGORITHME DE DÉPARTAGE: Poids additionnel des cartes secondaires
+        let puissances = cartesJouees.map(c => getPuissanceCarte(c.rang, c.couleur, c.classe));
+        puissances.sort((a, b) => b - a); 
+        
+        let p = puissances[0]; 
+        if (nb >= 2) p += (puissances[1] - rangBase) * 0.1; 
+        if (nb === 3) p += (puissances[2] - rangBase) * 0.01; 
+        
+        combo.puissance = p;
         combo.nom = (nb === 1) ? "Carte Seule" : (nb === 2) ? "Paire" : "Brelan";
         return combo;
     }
@@ -412,7 +416,6 @@ function partieTerminee(gagnant) {
     let gagnantGlobal = gagnant;
     dernierGagnant = gagnant;
 
-    // Calcul immédiat des scores et pénalités
     let maxCartes = -1; dernierPerdant = 0;
     let cartesRestantes = mains.map(m => m.length);
     mains.forEach((m, i) => { if(m.length > maxCartes) { maxCartes = m.length; dernierPerdant = i; } });
@@ -423,8 +426,6 @@ function partieTerminee(gagnant) {
     });
 
     for(let i=0; i<4; i++) scoresGlobaux[i] += penalites[i];
-
-    // On envoie d'abord la table mise à jour (avec les scores recalculés qui s'affichent instantanément à droite)
     synchroniserToutLeMonde();
 
     let finDePartie = scoresGlobaux.some(score => score >= 100);
@@ -438,7 +439,6 @@ function partieTerminee(gagnant) {
                 indexVainqueur = i;
             }
         }
-        
         io.emit('finPartie', { 
             vainqueurJeu: nomsJoueurs[indexVainqueur],
             gagnantManche: gagnantGlobal, 
@@ -562,13 +562,14 @@ io.on('connection', (socket) => {
         demarrerNouvelleManche();
     });
 
+    // SÉCURITÉ ANTI-PLANTAGE EN CAS DE RECHARGEMENT DE PAGE (F5)
     socket.on('disconnect', () => {
         let index = connexions.indexOf(socket.id);
         if (index > -1) {
             connexions.splice(index, 1);
         }
         
-        if (connexions.length === 0) {
+        if (partieEnCours || connexions.length > 0) {
             partieEnCours = false;
             etatTable = null;
             dernierGagnant = null;
@@ -577,6 +578,7 @@ io.on('connection', (socket) => {
             scoresGlobaux = [0, 0, 0, 0];
             config = { nbHumains: 2 }; 
             premierPliDePartie = true; 
+            io.emit('partieAnnulee'); // Expulse le joueur restant proprement
         }
     });
 });
